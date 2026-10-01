@@ -1,0 +1,171 @@
+/* Quissly Quick widget — body-level floating dropdown + search-box controls. */
+
+.quissly-quick {
+	position: absolute;
+	z-index: 100000;
+	max-width: 520px;
+	max-height: 70vh;
+	overflow-y: auto;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	box-shadow: 0 8px 24px rgba( 0, 0, 0, 0.14 );
+	padding: 4px;
+	font-size: 14px;
+}
+
+.quissly-quick--horizontal {
+	display: flex;
+	flex-wrap: wrap;
+	max-width: 720px;
+}
+
+.quissly-quick--horizontal .quissly-quick__row {
+	flex: 0 0 30%;
+	flex-direction: column;
+	text-align: center;
+}
+
+/* Mobile is ALWAYS a vertical dropdown, even if the merchant chose horizontal cards. */
+@media ( max-width: 600px ) {
+	.quissly-quick--horizontal {
+		display: block;
+	}
+	.quissly-quick--horizontal .quissly-quick__row {
+		flex-direction: row;
+		text-align: left;
+	}
+}
+
+/* Inside the search overlay (assets/js/overlay.js): a full-width card under the bar,
+   rows in a grid, laid out by the overlay instead of measured and floated. */
+.quissly-quick.quissly-quick--in-overlay {
+	position: static;
+	max-width: none;
+	max-height: none;
+	grid-template-columns: repeat( auto-fill, minmax( 300px, 1fr ) );
+	gap: 12px;
+	padding: 20px;
+	border: 0;
+	border-radius: 28px;
+	box-shadow: 0 20px 55px rgba( 0, 0, 0, 0.3 ), 0 2px 8px rgba( 0, 0, 0, 0.14 );
+	font-size: 15px;
+}
+
+.quissly-quick--in-overlay .quissly-quick__row {
+	flex-direction: row;
+	text-align: left;
+	padding: 10px 14px;
+	border-radius: 14px;
+	background: #f7f7f7;
+}
+
+.quissly-quick--in-overlay .quissly-quick__row:hover,
+.quissly-quick--in-overlay .quissly-quick__row.is-active {
+	background: #f1f1f1;
+}
+
+.quissly-quick--in-overlay .quissly-quick__thumb {
+	width: 58px;
+	height: 58px;
+	border-radius: 10px;
+	object-fit: contain;
+	background: #fff;
+}
+
+.quissly-quick--in-overlay .quissly-quick__seeall,
+.quissly-quick--in-overlay .quissly-quick__empty {
+	grid-column: 1 / -1;
+}
+
+.quissly-quick--in-overlay .quissly-quick__seeall {
+	margin-top: 0;
+	border-top: 0;
+}
+
+.quissly-quick__row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px;
+	text-decoration: none;
+	color: inherit;
+	border-radius: 4px;
+}
+
+.quissly-quick__row:hover,
+.quissly-quick__row.is-active {
+	background: #f0f0f1;
+	outline: none;
+}
+
+.quissly-quick__thumb {
+	width: 40px;
+	height: 40px;
+	object-fit: cover;
+	border-radius: 4px;
+	background: #f0f0f1;
+	flex: 0 0 auto;
+	display: inline-block;
+}
+
+.quissly-quick__title {
+	flex: 1 1 auto;
+}
+
+.quissly-quick__price {
+	white-space: nowrap;
+	color: #555;
+}
+
+.quissly-quick__price del {
+	color: #999;
+	margin-right: 4px;
+}
+
+.quissly-quick__empty {
+	padding: 12px;
+	color: #777;
+	text-align: center;
+}
+
+.quissly-quick__seeall {
+	display: block;
+	width: 100%;
+	text-align: center;
+	padding: 10px;
+	margin-top: 4px;
+	border: 0;
+	border-top: 1px solid #eee;
+	background: transparent;
+	cursor: pointer;
+	font-weight: 600;
+	color: #2271b1;
+}
+
+.quissly-controls {
+	display: inline-flex;
+	gap: 4px;
+	margin-left: 6px;
+	vertical-align: middle;
+}
+
+.quissly-control {
+	border: 1px solid #dcdcde;
+	background: #fff;
+	border-radius: 4px;
+	cursor: pointer;
+	padding: 4px 8px;
+	line-height: 1;
+	color: #50575e;
+}
+
+.quissly-control:hover {
+	background: #f0f0f1;
+}
+
+.quissly-control svg {
+	width: 16px;
+	height: 16px;
+	display: block;
+}
