@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,6 +47,11 @@ GPL-licensed; Quissly the service is the paid product.
 3. Follow the setup wizard to connect your Quissly account and run the initial sync.
 
 == Changelog ==
+
+= 1.0.1 =
+* Fixed: a product moved to the trash and restored before the next sync stayed out of search
+  until it was edited again.
+* Changed: runs on PHP 7.4 without relying on WordPress's PHP 8 compatibility functions.
 
 = 1.0.0 =
 * First real release. Catalog sync, AI-ranked search, Quick autocomplete with voice

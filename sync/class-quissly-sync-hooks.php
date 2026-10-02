@@ -175,7 +175,9 @@ class Quissly_Sync_Hooks {
 			$this->enqueue_delete( $product_id );
 			return;
 		}
-		( new Quissly_Dirty_Queue() )->enqueue( $product_id, Quissly_Dirty_Queue::OP_UPSERT );
+		// Eligible right now, so this upsert replaces a stale pending delete (trash -> restore
+		// before the queue flushed: WooCommerce restores the product's previous status).
+		( new Quissly_Dirty_Queue() )->enqueue_live( $product_id );
 		$this->worker->maybe_schedule();
 	}
 

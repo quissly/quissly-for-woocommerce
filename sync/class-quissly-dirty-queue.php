@@ -110,6 +110,37 @@ class Quissly_Dirty_Queue {
 	}
 
 	/**
+	 * Queue an upsert for a product the caller has just checked is LIVE (eligible), replacing a
+	 * pending delete. enqueue() lets a delete win, so a save fired during a deletion never undoes
+	 * it - but a product trashed and restored (WooCommerce restores its previous status) before
+	 * the queue flushed then lost to its own stale delete and stayed out of search until its next
+	 * edit. A live check is
+	 * the current truth: a product being trashed or deleted fails it and is queued as a delete.
+	 *
+	 * @param int $product_id Product id.
+	 * @return bool
+	 */
+	public function enqueue_live( $product_id ) {
+		global $wpdb;
+
+		$product_id = (int) $product_id;
+		if ( $product_id <= 0 ) {
+			return false;
+		}
+		$table = self::table_name();
+		$sql   = $wpdb->prepare(
+			"INSERT INTO {$table} (product_id, operation, created_at, attempts)
+			 VALUES (%d, %s, %s, 0)
+			 ON DUPLICATE KEY UPDATE operation = VALUES(operation), attempts = 0", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$product_id,
+			self::OP_UPSERT,
+			gmdate( 'Y-m-d H:i:s' )
+		);
+
+		return false !== $wpdb->query( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	}
+
+	/**
 	 * Number of pending items.
 	 *
 	 * @return int

@@ -17,10 +17,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    once records match the ProductItem schema (original_price numeric; ids STRINGS — FACT 1).
  *  - Ingest->search round-trip WORKS once ids are strings: qsearch for an ingested title
  *    returns results with the synced categories as `category` term-facet values and an
- *    `original_price` range facet (PLAN #3: synced field name == returned facet name).
+ *    `original_price` range facet (the synced field name is the returned facet name).
  *
- * SEARCH-RESULT ID (resolved, Correction 1): qsearch returns a UUIDv5 per document; the WC
- * id is in documents[].metadata.q_external_id — read by the response parser. No mapping layer.
+ * SEARCH-RESULT ID: qsearch returns the WooCommerce post id at documents[].id, read by the
+ * response parser - no mapping layer. (An interim backend returned a UUIDv5 with the post id in
+ * metadata.q_external_id; that was reverted.)
  *
  * STATUS (resolved, Correction 2): GET /v1beta/catalog with QUERY PARAMS
  * (operation_id, timestamp, service=search), a FRESH ISO 8601 timestamp (T separator) that is
