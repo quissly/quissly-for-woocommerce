@@ -157,10 +157,12 @@ class Quissly_Wizard {
 	 * in-memory-until-success guard, nothing here has been sent to Quissly yet, so a
 	 * failed attempt strands nothing; the SAME stored key is simply retried.
 	 *
-	 * @param string $email Account owner / console sign-in identity.
+	 * @param string      $email      Account owner / console sign-in identity.
+	 * @param string|null $store_name  The name typed on Quissly Setup; null = store_display_name().
+	 * @param string|null $description The description on Quissly Setup; null = the plugin's one-liner.
 	 * @return array{ok:bool,message:string}
 	 */
-	public static function connect_automatically( $email ) {
+	public static function connect_automatically( $email, $store_name = null, $description = null ) {
 		$email = trim( (string) $email );
 		if ( '' === $email || ! is_email( $email ) ) {
 			return array(
@@ -203,9 +205,10 @@ class Quissly_Wizard {
 			$domain,
 			$email,
 			$public,
-			self::store_display_name(),
+			null !== $store_name ? $store_name : self::store_display_name(),
 			'' !== $first_name ? $first_name : null,
-			'' !== $last_name ? $last_name : null
+			'' !== $last_name ? $last_name : null,
+			$description
 		);
 
 		if ( ! $response['ok'] ) {

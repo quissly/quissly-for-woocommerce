@@ -65,6 +65,7 @@ final class Quissly_Plugin {
 			'api/class-quissly-live-provisioner-client.php',
 			'api/class-quissly-mock-provisioner-client.php',
 			'api/class-quissly-panel-session.php',
+			'api/class-quissly-store-billing.php',
 			'api/interface-quissly-service-directory-client.php',
 			'api/class-quissly-live-service-directory-client.php',
 			'api/class-quissly-mock-service-directory-client.php',
@@ -100,6 +101,10 @@ final class Quissly_Plugin {
 			'includes/class-quissly-overlay.php',
 			'admin/class-quissly-settings.php',
 			'admin/class-quissly-wizard.php',
+			'includes/class-quissly-description-draft.php',
+			'includes/class-quissly-setup-input.php',
+			'admin/class-quissly-setup.php',
+			'admin/class-quissly-billing.php',
 			'admin/class-quissly-admin-rest.php',
 			'admin/class-quissly-admin.php',
 		);
@@ -216,6 +221,10 @@ final class Quissly_Plugin {
 	private function register_admin() {
 		( new Quissly_Admin() )->register();
 		( new Quissly_Admin_Rest() )->register();
+		// Quissly Setup's AJAX endpoints, and its scheduled first-sync start.
+		( new Quissly_Setup() )->register();
+		// Billing's plan actions.
+		( new Quissly_Billing() )->register();
 
 		add_filter(
 			'woocommerce_integrations',

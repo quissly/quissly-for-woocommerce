@@ -3,7 +3,7 @@
  * Plugin Name:       Quissly for WooCommerce
  * Plugin URI:        https://quissly.com/woocommerce
  * Description:        Replace native WooCommerce search with Quissly AI product discovery: semantic search, voice & image search, autocomplete, and the QChat assistant.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Author:            Quissly
  * Author URI:        https://quissly.com
  * Requires at least: 6.5
@@ -13,6 +13,7 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       quissly-for-woocommerce
  * Domain Path:       /languages
+ * Update URI:        https://github.com/quissly/quissly-for-woocommerce
  *
  * @package Quissly_For_WooCommerce
  */
@@ -21,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'QUISSLY_VERSION', '1.0.1' );
+define( 'QUISSLY_VERSION', '1.0.2' );
 define( 'QUISSLY_PLUGIN_FILE', __FILE__ );
 define( 'QUISSLY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'QUISSLY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -57,8 +58,26 @@ function quissly_activate() {
 	require_once QUISSLY_PLUGIN_DIR . 'sync/class-quissly-dirty-queue.php';
 
 	Quissly_Dirty_Queue::create_table();
+	update_option( 'quissly_installed_version', QUISSLY_VERSION, false );
 }
 register_activation_hook( __FILE__, 'quissly_activate' );
+
+/**
+ * After an update: WordPress does not run the activation hook when a plugin updates, so
+ * what activation sets up (new tables) is set up here the first time a new version loads.
+ */
+function quissly_after_update() {
+	if ( get_option( 'quissly_installed_version' ) !== QUISSLY_VERSION ) {
+		quissly_activate();
+	}
+}
+add_action( 'plugins_loaded', 'quissly_after_update', 5 );
+
+// Updates come from the plugin's GitHub releases, checked once a day and always installed
+// automatically by WordPress. Registered before the WooCommerce check, so a store whose
+// WooCommerce is off still receives them.
+require_once QUISSLY_PLUGIN_DIR . 'includes/class-quissly-updater.php';
+Quissly_Updater::register();
 
 /**
  * Bootstrap the plugin once all plugins are loaded.

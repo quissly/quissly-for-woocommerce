@@ -10,11 +10,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers the top-level Quissly menu - Configuration, Dashboard, Quissly Admin Panel, the
- * same three entries as the Magento plugin - renders those screens, and handles their form
- * submissions (nonce + capability checked, PRG redirect). Setup lives at the top of
- * Configuration until it is finished (Magento's "Keys & Connection" block), and the sync
- * log on the Dashboard; neither has a page of its own. The WooCommerce Integrations tab is a separate class
+ * Registers the top-level Quissly menu - Configuration, Dashboard, Quissly Admin Panel,
+ * Billing, the same four entries as the Magento plugin - renders those screens, and handles
+ * their form submissions (nonce + capability checked, PRG redirect). Until setup is finished
+ * every one of them opens Quissly Setup instead (Quissly_Setup, the Shopify app's onboarding), and
+ * the sync log lives on the Dashboard; neither has a page of its own. The WooCommerce Integrations tab is a separate class
  * (Quissly_WC_Integration) that reads/writes the SAME options via Quissly_Settings.
  *
  * Output is escaped at the point of echo; input is sanitized through Quissly_Settings.
@@ -25,6 +25,7 @@ class Quissly_Admin {
 	const MENU_SLUG  = 'quissly';
 	const PAGE_SETTINGS = 'quissly-settings';
 	const PAGE_PANEL    = 'quissly-panel';
+	const PAGE_BILLING  = 'quissly-billing';
 
 	/** Sync log lines shown on the Dashboard (its only home: there is no Sync Log page). */
 	const LOG_LINES = 200;
@@ -47,6 +48,14 @@ class Quissly_Admin {
 	 * @param string $hook Current admin page hook suffix.
 	 */
 	public function enqueue_assets( $hook ) {
+		if ( false !== strpos( (string) $hook, self::MENU_SLUG ) && ! Quissly_Setup::is_complete() ) {
+			Quissly_Setup::enqueue();
+			return;
+		}
+		if ( false !== strpos( (string) $hook, self::PAGE_BILLING ) ) {
+			Quissly_Billing::enqueue();
+			return;
+		}
 		if ( 'toplevel_page_' . self::MENU_SLUG !== $hook ) {
 			return;
 		}
@@ -105,10 +114,12 @@ class Quissly_Admin {
 		add_submenu_page( self::MENU_SLUG, __( 'Configuration', 'quissly-for-woocommerce' ), __( 'Configuration', 'quissly-for-woocommerce' ), self::CAP, self::PAGE_SETTINGS, array( $this, 'render_settings' ) );
 		// Last: Quissly's own panel is not part of setting the plugin up.
 		add_submenu_page( self::MENU_SLUG, __( 'Quissly Admin Panel', 'quissly-for-woocommerce' ), __( 'Quissly Admin Panel', 'quissly-for-woocommerce' ), self::CAP, self::PAGE_PANEL, array( $this, 'render_panel' ) );
+		// Fourth, as in Magento: the store's plans, usage and invoices.
+		add_submenu_page( self::MENU_SLUG, __( 'Billing', 'quissly-for-woocommerce' ), __( 'Billing', 'quissly-for-woocommerce' ), self::CAP, self::PAGE_BILLING, array( $this, 'render_billing' ) );
 
 		global $submenu;
 		if ( isset( $submenu[ self::MENU_SLUG ] ) ) {
-			$order = array( self::PAGE_SETTINGS, self::MENU_SLUG, self::PAGE_PANEL );
+			$order = array( self::PAGE_SETTINGS, self::MENU_SLUG, self::PAGE_PANEL, self::PAGE_BILLING );
 			usort(
 				$submenu[ self::MENU_SLUG ],
 				static function ( $a, $b ) use ( $order ) {
@@ -126,9 +137,9 @@ class Quissly_Admin {
 		if ( ! current_user_can( self::CAP ) || Quissly_Wizard::is_complete() ) {
 			return;
 		}
-		// Don't nag while already on the screen that holds setup.
+		// Don't nag on Quissly's own pages: every one of them shows setup until it is done.
 		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		if ( self::PAGE_SETTINGS === $page ) {
+		if ( 0 === strpos( $page, self::MENU_SLUG ) ) {
 			return;
 		}
 		printf(
@@ -148,6 +159,9 @@ class Quissly_Admin {
 	 */
 	public function render_dashboard() {
 		$this->guard();
+		if ( $this->render_setup_instead() ) {
+			return;
+		}
 
 		$store      = new Quissly_Key_Store();
 		$has_key    = $store->has_stored_key() || $store->is_dev_override_active();
@@ -281,6 +295,9 @@ class Quissly_Admin {
 	 */
 	public function render_settings() {
 		$this->guard();
+		if ( $this->render_setup_instead() ) {
+			return;
+		}
 
 		echo '<div class="wrap">';
 		echo '<h1>' . esc_html__( 'Quissly Configuration', 'quissly-for-woocommerce' ) . '</h1>';
@@ -426,6 +443,9 @@ class Quissly_Admin {
 	 */
 	public function render_panel() {
 		$this->guard();
+		if ( $this->render_setup_instead() ) {
+			return;
+		}
 
 		echo '<div class="wrap quissly-panel">';
 		echo '<h1>' . esc_html__( 'Quissly Admin Panel', 'quissly-for-woocommerce' ) . '</h1>';
@@ -492,8 +512,42 @@ class Quissly_Admin {
 	}
 
 	/**
-	 * The setup section at the top of Configuration (the current wizard step), shown until
-	 * setup is finished.
+	 * Quissly Billing: plans, usage and invoices (Quissly_Billing). Setup until it is finished.
+	 */
+	public function render_billing() {
+		$this->guard();
+		if ( $this->render_setup_instead() ) {
+			return;
+		}
+		echo '<div class="wrap quissly-billing-wrap">';
+		echo '<h1>' . esc_html__( 'Quissly Billing', 'quissly-for-woocommerce' ) . '</h1>';
+		( new Quissly_Billing() )->render();
+		echo '</div>';
+	}
+
+	/**
+	 * Quissly Setup in place of the page asked for, until setup is finished - the menu's
+	 * three entries all lead to it. `?quissly_manual` on Configuration is the one way past
+	 * it: the paste-a-token fallback (render_wizard()), for an account Quissly made by hand.
+	 *
+	 * @return bool Whether Setup was rendered.
+	 */
+	private function render_setup_instead() {
+		if ( Quissly_Setup::is_complete() || ! empty( $_GET['quissly_manual'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only display toggle.
+			return false;
+		}
+		echo '<div class="wrap quissly-setup-wrap">';
+		echo '<h1>' . esc_html__( 'Quissly Setup', 'quissly-for-woocommerce' ) . '</h1>';
+		$this->print_flash();
+		( new Quissly_Setup() )->render();
+		echo '</div>';
+
+		return true;
+	}
+
+	/**
+	 * The paste-a-token fallback at the top of Configuration (the current wizard step), shown
+	 * until setup is finished - reached with `?quissly_manual` from Quissly Setup.
 	 */
 	public function render_wizard() {
 		$this->guard();
@@ -699,6 +753,8 @@ class Quissly_Admin {
 			'saved_resync' => __( 'Settings saved. The attributes sent to Quissly changed, so your whole catalog is being re-sent - see the Dashboard for progress.', 'quissly-for-woocommerce' ),
 			'step'       => __( 'Step saved.', 'quissly-for-woocommerce' ),
 			'setup_done' => __( 'Setup is complete. Quissly is connected and your catalog has been queued for sync.', 'quissly-for-woocommerce' ),
+			'live'       => __( 'Quissly search is live on your store.', 'quissly-for-woocommerce' ),
+			'saved_setup' => __( 'Setup saved. QSearch stays off until you switch it on in Configuration, once your catalog has synced.', 'quissly-for-woocommerce' ),
 		);
 		$message = isset( $messages[ $status ] ) ? $messages[ $status ] : __( 'Done.', 'quissly-for-woocommerce' );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( $message ) . '</p></div>';

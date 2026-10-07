@@ -69,15 +69,17 @@ class Quissly_Mock_Provisioner_Client implements Quissly_Provisioner_Client {
 	 * @param string|null $store_name     Display name, or null.
 	 * @param string|null $first_name     Admin's first name, or null.
 	 * @param string|null $last_name      Admin's last name, or null.
+	 * @param string|null $description    What the store is, or null for the plugin's one-liner.
 	 * @return array{ok:bool,api_key:string,project_id:string,store_id:string,error:string}
 	 */
-	public function provision( $domain, $email, $public_key_pem, $store_name, $first_name, $last_name ) {
+	public function provision( $domain, $email, $public_key_pem, $store_name, $first_name, $last_name, $description = null ) {
 		$this->calls[] = array(
 			'domain'         => $domain,
 			'email'          => $email,
 			'public_key_pem' => $public_key_pem,
 			'store_name'     => $store_name,
 			'first_name'     => $first_name,
+			'description'    => $description,
 			'last_name'      => $last_name,
 		);
 

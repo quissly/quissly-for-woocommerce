@@ -57,6 +57,7 @@ class Quissly_Uninstall {
 		$t1 = $wpdb->esc_like( '_transient_quissly_' ) . '%';
 		$t2 = $wpdb->esc_like( '_transient_timeout_quissly_' ) . '%';
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s", $t1, $t2 ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		delete_site_transient( 'quissly_update_release' ); // the update check's cache (a site transient).
 
 		// Direct DELETEs bypass the options cache; clear it so the wipe is observable.
 		wp_cache_flush();

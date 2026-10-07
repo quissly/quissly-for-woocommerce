@@ -78,9 +78,8 @@ class Quissly_Admin_Rest {
 	 * to Action Scheduler.
 	 *
 	 * Inline count is deliberately small (2, not "all"). One flush_batch() sends up to
-	 * BATCH_SIZE products, then - on the live client - polls status up to MAX_STATUS_POLLS
-	 * times, STATUS_POLL_DELAY seconds apart (worst case ~tens of seconds per batch once the
-	 * request round-trips are counted). Draining every batch of a large catalog inline, in
+	 * BATCH_SIZE products in calls of up to 60 s each (the status is no longer polled since
+	 * 2026-10-07, but a slow ingest call still takes its time). Draining every batch of a large catalog inline, in
 	 * one REST request, risked hitting max_execution_time; nothing wedges if it does - queue
 	 * rows aren't claim-marked, so a large catalog still finishes, just via Action Scheduler
 	 * once schedule_now() below hands off the remainder.

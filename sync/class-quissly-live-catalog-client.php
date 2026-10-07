@@ -1,6 +1,6 @@
 <?php
 /**
- * Live catalog sender (v1-signed) — POST add / PUT update / DELETE + status poll.
+ * Live catalog sender (v1-signed) — POST add / PUT update / DELETE.
  *
  * @package Quissly_For_WooCommerce
  */
@@ -23,12 +23,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  * response parser - no mapping layer. (An interim backend returned a UUIDv5 with the post id in
  * metadata.q_external_id; that was reverted.)
  *
- * STATUS (resolved, Correction 2): GET /v1beta/catalog with QUERY PARAMS
+ * SETTLED ON THE SEND'S ANSWER (2026-10-07, the Quissly Shopify app's way): a
+ * 2xx to the POST/PUT/DELETE is the batch delivered; the operation's status is not polled.
+ * No answer leaves the batch queued (no attempt spent), 429 backs off, an account refusal
+ * pauses, any other status is a failure the worker retries then drops.
+ *
+ * STATUS (for diagnostics only - tests/live/*): GET /v1beta/catalog with QUERY PARAMS
  * (operation_id, timestamp, service=search), a FRESH ISO 8601 timestamp (T separator) that is
  * also the signed `{op}.{ts}` payload, returns HTTP 200 with the real outcome in the BODY:
  * `status` + a per-item `data` map keyed by uuid carrying `q_external_id`, per-item `status`
- * and `reason`. interpret_status() classifies per item (success or "already exists" skip ->
- * ok; genuine failure -> retry). The blind optimistic 2xx is gone.
+ * and `reason`. interpret_status() classifies such a body; the sync never reads it.
  *
  * STILL OPEN: DELETE and PUT shapes are built per the documented contract but not yet
  * live-verified. The clean per-item SUCCESS status string is inferred (not yet observed — the
@@ -37,15 +41,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 
 	const PATH = '/v1beta/catalog';
-
-	/**
-	 * Status polling bound: keep polling a PENDING (202) operation up to this many times,
-	 * STATUS_POLL_DELAY seconds apart, before falling back to the optimistic accept. A
-	 * terminal state (completed/partial/failed) or an UNAVAILABLE (404) breaks out at once,
-	 * so this only caps the genuinely-pending case (no long stall against the 404 endpoint).
-	 */
-	const MAX_STATUS_POLLS  = 5;
-	const STATUS_POLL_DELAY = 3;
 
 	/**
 	 * Send NEW products via POST /add. /add is NOT idempotent — duplicates come back in
@@ -70,8 +65,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 	}
 
 	/**
-	 * Shared add/update path: build the v1-signed body, send, settle the immediate response,
-	 * then poll the operation to a terminal state (fresh ISO 8601 ts per poll — Correction 2).
+	 * Shared add/update path: build the v1-signed body, send, settle on the response.
 	 *
 	 * @param string           $method  'POST' (add) or 'PUT' (update).
 	 * @param array<int,array> $records Records keyed by id.
@@ -92,145 +86,17 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 		$all_ids = array_map( 'intval', array_keys( $data ) );
 		$body    = array( 'data' => $data, 'service' => 'search', 'timestamp' => $ts );
 
-		$res     = $this->http()->request_v1( $method, self::PATH, $body, $first, $ts, 60 );
-		$settled = $this->settle( $res, $all_ids, $ctx );
+		$res = $this->http()->request_v1( $method, self::PATH, $body, $first, $ts, 60 );
 
-		// Transport error / concurrency backoff / account refusal / hard rejection: nothing
-		// more to do.
-		if ( null === $settled || ! empty( $settled['concurrency_limited'] ) || ! empty( $settled['account_refused'] ) || ! empty( $settled['failed'] ) ) {
-			return $settled;
-		}
-
-		// INTERIM status handling (CHANGE 2): poll /status and TRUST a terminal HTTP 200 as
-		// whole-batch success — marking the SENT (parent) ids ok WITHOUT matching per-item
-		// q_external_id. The backend currently returns VARIANT ids in /status for a variable
-		// product (a backend bug, fix pending), which the parent-keyed dirty queue can never
-		// match — so per-item reconciliation would retry variable products forever. A terminal
-		// 200 => the operation completed; mark the batch's products complete and clear the queue.
-		//
-		// Known limitation: restore proper per-item status reconciliation on the PARENT id (poll_operation()
-		// + interpret_status(), kept intact below) once the backend /status returns the correct
-		// parent id. Trusting 200 means we do NOT currently detect per-item failures via status.
-		$operation_id = $settled['operation_id'];
-		if ( ! empty( $operation_id ) ) {
-			$ok = $this->poll_status_interim( (string) $operation_id, $all_ids );
-			if ( null !== $ok ) {
-				Quissly_Sync_Log::log( 'catalog ' . $ctx . ' op ' . $operation_id . ' status 200 terminal; batch accepted (interim, ids not per-item matched).' );
-				return array(
-					'ok'                  => $ok,
-					'failed'              => array(),
-					'already_exists'      => array(),
-					'operation_id'        => $operation_id,
-					'concurrency_limited' => false,
-				);
-			}
-			// No terminal 200 within the bound (still pending / transport hiccup): accept on the
-			// POST 2xx ($settled already has ok === $all_ids) so the batch is not re-sent.
-			Quissly_Sync_Log::log( 'catalog ' . $ctx . ' op ' . $operation_id . ' status not terminal-200 within bound; accepted optimistically.' );
-		}
-
-		return $settled;
-	}
-
-	/**
-	 * INTERIM status poll (CHANGE 2): poll /status until a terminal HTTP 200, then return the
-	 * batch's SENT ids as ok (trust the 200; do NOT inspect per-item q_external_id). Returns
-	 * null on transport error or if no terminal 200 arrives within the bound (caller then
-	 * accepts the POST 2xx). FRESH ISO 8601 ts per poll (it is both the query param and the
-	 * signed `{op}.{ts}` payload — see Quissly_Http_Client::get_v1_status).
-	 *
-	 * @param string $operation_id Operation id.
-	 * @param int[]  $all_ids      The batch's SENT (parent/simple) product ids.
-	 * @return int[]|null
-	 */
-	private function poll_status_interim( $operation_id, array $all_ids ) {
-		for ( $i = 0; $i < self::MAX_STATUS_POLLS; $i++ ) {
-			$ts  = Quissly_Signer::format_timestamp_iso8601( microtime( true ) ); // FRESH per poll.
-			$res = $this->http()->get_v1_status( $operation_id, $ts, 30 );
-			if ( is_wp_error( $res ) ) {
-				return null;
-			}
-			$decision = self::interpret_status_interim( (int) $res['code'], $res['body'], $all_ids );
-			if ( 'ok' === $decision['state'] ) {
-				return $decision['ok'];
-			}
-			if ( $i < self::MAX_STATUS_POLLS - 1 ) {
-				sleep( self::STATUS_POLL_DELAY );
-			}
-		}
-
-		return null; // never reached a terminal 200 within the bound -> optimistic accept.
-	}
-
-	/**
-	 * INTERIM status decision (CHANGE 2). PURE + unit-testable. A terminal HTTP 200 (i.e. 200
-	 * whose body status is NOT a pending state) => 'ok' with the SENT ids; everything else
-	 * (pending status, 202/404 not-ready, 5xx) => 'pending' (keep polling). Per-item
-	 * q_external_id is intentionally IGNORED — see the known limitation in send_mutation().
-	 *
-	 * @param int   $code    HTTP status code from /status.
-	 * @param mixed $body    Decoded /status body.
-	 * @param int[] $all_ids The batch's SENT product ids.
-	 * @return array{state:string,ok:int[]}
-	 */
-	public static function interpret_status_interim( $code, $body, array $all_ids ) {
-		$code    = (int) $code;
-		$all_ids = array_values( array_map( 'intval', $all_ids ) );
-		$top     = ( is_array( $body ) && isset( $body['status'] ) ) ? strtolower( (string) $body['status'] ) : '';
-		$pending = array( 'pending', 'processing', 'in progress', 'in_progress', 'queued', 'running', 'started' );
-
-		if ( 200 === $code && ! in_array( $top, $pending, true ) ) {
-			return array( 'state' => 'ok', 'ok' => $all_ids );
-		}
-
-		return array( 'state' => 'pending', 'ok' => array() );
-	}
-
-	/**
-	 * Poll an operation to a terminal decision, or null to signal "use the optimistic accept"
-	 * (status still pending after the bound, or a transport error).
-	 *
-	 * RETAINED FOR RESTORATION (currently UNUSED — see send_mutation()'s CHANGE 2 interim): this
-	 * is the PROPER per-item poll (uses interpret_status()), to be re-wired once the backend
-	 * /status returns the correct PARENT id. Until then send_mutation() uses poll_status_interim().
-	 *
-	 * Uses the CONFIRMED status form: each poll mints a FRESH current-UTC ISO 8601 timestamp
-	 * (Correction 2) — NOT the add's timestamp — which is both the query param and the signed
-	 * `{op}.{ts}` payload (see Quissly_Http_Client::get_v1_status).
-	 *
-	 * @param string $operation_id Operation id.
-	 * @param int[]  $all_ids      Ids in the batch.
-	 * @return array{ok:int[],failed:int[],already_exists:int[]}|null
-	 */
-	private function poll_operation( $operation_id, array $all_ids ) {
-		for ( $i = 0; $i < self::MAX_STATUS_POLLS; $i++ ) {
-			$ts  = Quissly_Signer::format_timestamp_iso8601( microtime( true ) ); // FRESH per poll.
-			$res = $this->http()->get_v1_status( $operation_id, $ts, 30 );
-			if ( is_wp_error( $res ) ) {
-				return null;
-			}
-			$decision = self::interpret_status( (int) $res['code'], $res['body'], $all_ids );
-			if ( 'pending' !== $decision['state'] ) {
-				return array(
-					'ok'             => $decision['ok'],
-					'failed'         => $decision['failed'],
-					'already_exists' => $decision['already_exists'],
-				);
-			}
-			if ( $i < self::MAX_STATUS_POLLS - 1 ) {
-				sleep( self::STATUS_POLL_DELAY );
-			}
-		}
-
-		return null; // still pending after the bound — optimistic accept.
+		return $this->settle( $res, $all_ids, $ctx );
 	}
 
 	/**
 	 * Interpret a status-poll result into a terminal decision. PURE + unit-testable.
 	 *
 	 * RETAINED FOR RESTORATION (currently UNUSED in production — see CHANGE 2). This is the
-	 * proper per-item classifier (by q_external_id); restore it once the backend /status returns
-	 * the correct PARENT id. The interim path uses interpret_status_interim() instead.
+	 * per-item classifier (by q_external_id), for diagnostics (tests/live/*): the sync settles
+	 * on the send's answer and never reads the status.
 	 *
 	 * LIVE-CONFIRMED body shape (the corrected query-param status form returns HTTP 200 with
 	 * the real outcome in the BODY, not the HTTP code):
@@ -433,8 +299,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 		$code = (int) $res['code'];
 
 		if ( in_array( $code, array( 200, 201, 202 ), true ) ) {
-			// Accepted for async processing. Optimistic fallback if the poll can't reach a
-			// terminal state (the caller polls the operation when an operation_id is present).
+			// Accepted: the batch is delivered (its operation's status is not read).
 			return array(
 				'ok'                  => $ids,
 				'failed'              => array(),
