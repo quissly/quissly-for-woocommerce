@@ -94,6 +94,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 									<?php esc_html_e( 'Cancel subscription', 'quissly-for-woocommerce' ); ?>
 								</button>
 							<?php endif; ?>
+							<?php if ( null !== $plan && $plan['can_refund'] ) : ?>
+								<button type="button" class="q-button q-button--tertiary" data-q-op="refund_preview" data-id="<?php echo esc_attr( $plan['id'] ); ?>">
+									<?php esc_html_e( 'Request a refund', 'quissly-for-woocommerce' ); ?>
+								</button>
+							<?php endif; ?>
 						</div>
 
 						<?php
@@ -132,6 +137,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 										class="q-plan<?php echo $card['popular'] ? ' is-popular' : ''; ?>"
 										data-q-pick="<?php echo esc_attr( $card['id'] ); ?>"
 										data-free="<?php echo $card['free'] ? '1' : '0'; ?>"
+										<?php if ( null !== $card['topup'] && ! $changing ) : ?>
+											<?php foreach ( array( 'min', 'max', 'default', 'min_text', 'max_text', 'rate', 'hint' ) as $at_key ) : ?>
+												data-at-<?php echo esc_attr( str_replace( '_', '-', $at_key ) ); ?>="<?php echo esc_attr( $card['topup'][ $at_key ] ); ?>"
+											<?php endforeach; ?>
+										<?php endif; ?>
 										<?php echo $card['disabled'] ? 'aria-disabled="true"' : ''; ?>>
 										<?php if ( $card['disabled'] ) : ?>
 											<span class="q-pill q-pill--warn q-plan__ribbon"><?php esc_html_e( 'Opens soon', 'quissly-for-woocommerce' ); ?></span>
@@ -160,6 +170,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 									</button>
 								<?php endforeach; ?>
 							</div>
+
+							<?php if ( ! $changing ) : ?>
+								<div class="q-autotopup" data-q-autotopup hidden>
+									<span class="q-autotopup__title"><?php esc_html_e( 'Automatic top-up on this plan', 'quissly-for-woocommerce' ); ?></span>
+									<label class="q-check">
+										<input type="checkbox" data-q-at-toggle>
+										<span><?php esc_html_e( 'Top up automatically', 'quissly-for-woocommerce' ); ?></span>
+										<span class="q-text-quiet" data-q-at-rate></span>
+									</label>
+									<div class="q-field" data-q-at-fields hidden>
+										<span class="q-field__label"><?php esc_html_e( 'Max per month', 'quissly-for-woocommerce' ); ?></span>
+										<span class="q-money">
+											<span class="q-money__prefix">$</span>
+											<input type="number" step="1" inputmode="decimal" data-q-at-max aria-label="<?php esc_attr_e( 'Max per month', 'quissly-for-woocommerce' ); ?>">
+										</span>
+										<span class="q-field__hint" data-q-at-hint></span>
+									</div>
+									<p class="q-text-quiet"><?php esc_html_e( 'When this month\'s requests are about to run out, Quissly buys one more block on your card. Off, requests stop at your plan\'s limit until next month.', 'quissly-for-woocommerce' ); ?></p>
+									<p class="q-field-error" data-q-at-error hidden></p>
+								</div>
+							<?php endif; ?>
 
 							<p class="q-text-quiet" data-q-same hidden>
 								<?php esc_html_e( 'This is the plan you are on. Pick a different one to change it.', 'quissly-for-woocommerce' ); ?>
@@ -240,6 +271,41 @@ if ( ! defined( 'ABSPATH' ) ) {
 							}
 						);
 						?>
+						<?php
+						$automatic = array_filter(
+							$view['extras'],
+							static function ( $e ) {
+								return $e['plan']['can_auto_topup'] && isset( $e['plan']['auto_topup']['min'] );
+							}
+						);
+						?>
+						<?php foreach ( $automatic as $extra ) : ?>
+							<?php $auto = $extra['plan']['auto_topup']; ?>
+							<div class="q-divider"></div>
+							<div class="q-autotopup" data-q-at-form data-id="<?php echo esc_attr( $extra['plan']['id'] ); ?>">
+								<?php /* translators: %s: QSearch or QChat. */ ?>
+								<span class="q-autotopup__title"><?php echo esc_html( count( $automatic ) > 1 ? sprintf( __( '%s: automatic top-up', 'quissly-for-woocommerce' ), $extra['label'] ) : __( 'Automatic top-up', 'quissly-for-woocommerce' ) ); ?></span>
+								<span class="q-text-quiet"><?php echo esc_html( $auto['label'] ); ?></span>
+								<label class="q-check">
+									<input type="checkbox" data-q-at-toggle<?php echo $auto['on'] ? ' checked' : ''; ?>>
+									<span><?php esc_html_e( 'Top up automatically', 'quissly-for-woocommerce' ); ?></span>
+									<span class="q-text-quiet"><?php echo esc_html( $auto['rate'] ); ?></span>
+								</label>
+								<div class="q-field" data-q-at-fields hidden>
+									<span class="q-field__label"><?php esc_html_e( 'Max per month', 'quissly-for-woocommerce' ); ?></span>
+									<span class="q-money">
+										<span class="q-money__prefix">$</span>
+										<input type="number" step="1" inputmode="decimal" data-q-at-max aria-label="<?php esc_attr_e( 'Max per month', 'quissly-for-woocommerce' ); ?>"
+											min="<?php echo esc_attr( $auto['min'] ); ?>" max="<?php echo esc_attr( $auto['max'] ); ?>"
+											data-min-text="<?php echo esc_attr( $auto['min_text'] ); ?>" data-max-text="<?php echo esc_attr( $auto['max_text'] ); ?>"
+											value="<?php echo esc_attr( $auto['default'] ); ?>">
+									</span>
+									<span class="q-field__hint"><?php echo esc_html( $auto['hint'] ); ?></span>
+								</div>
+								<p class="q-field-error" data-q-at-error hidden></p>
+								<div><button type="button" class="q-button" data-q-at-save><?php esc_html_e( 'Save automatic top-up', 'quissly-for-woocommerce' ); ?></button></div>
+							</div>
+						<?php endforeach; ?>
 						<?php if ( array() !== $buyable ) : ?>
 							<div class="q-divider"></div>
 							<div class="q-stack">
@@ -314,6 +380,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 						</div>
 					<?php endif; ?>
 				</section>
+
+				<p class="q-links">
+					<a href="<?php echo esc_url( Quissly_Billing::LINKS['refund'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Refund policy', 'quissly-for-woocommerce' ); ?></a>
+					<a href="<?php echo esc_url( Quissly_Billing::LINKS['terms'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Terms of service', 'quissly-for-woocommerce' ); ?></a>
+					<a href="<?php echo esc_url( Quissly_Billing::LINKS['privacy'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Privacy policy', 'quissly-for-woocommerce' ); ?></a>
+				</p>
 			</div>
 		</div>
 	<?php endif; ?>
@@ -323,6 +395,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<h3 class="q-modal__title" id="q-modal-title" data-q-modal-title></h3>
 			<div class="q-modal__body">
 				<p data-q-modal-body></p>
+				<div class="q-claim" data-q-modal-claim hidden>
+					<label class="q-field__label" for="q-claim"><?php esc_html_e( 'What happened?', 'quissly-for-woocommerce' ); ?></label>
+					<textarea id="q-claim" data-q-claim data-min="<?php echo (int) Quissly_Billing::CLAIM_MIN; ?>" maxlength="<?php echo (int) Quissly_Billing::CLAIM_MAX; ?>" rows="5"></textarea>
+					<span class="q-claim__count" data-q-claim-count></span>
+				</div>
 				<div class="q-banner q-banner--critical" data-q-modal-error hidden></div>
 			</div>
 			<div class="q-modal__actions">

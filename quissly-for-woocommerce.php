@@ -1,9 +1,10 @@
 <?php
+// #anita checking for updates,pls work
 /**
  * Plugin Name:       Quissly for WooCommerce
  * Plugin URI:        https://quissly.com/woocommerce
  * Description:        Replace native WooCommerce search with Quissly AI product discovery: semantic search, voice & image search, autocomplete, and the QChat assistant.
- * Version:           1.0.2
+ * Version:           1.0.3
  * Author:            Quissly
  * Author URI:        https://quissly.com
  * Requires at least: 6.5
@@ -22,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'QUISSLY_VERSION', '1.0.2' );
+define( 'QUISSLY_VERSION', '1.0.3' );
 define( 'QUISSLY_PLUGIN_FILE', __FILE__ );
 define( 'QUISSLY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'QUISSLY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -49,15 +50,17 @@ add_action(
 );
 
 /**
- * Activation: create the dirty-product queue table.
+ * Activation: create the dirty-product and shopping-event queue tables.
  *
  * Runs on activation only (not every load). The table creation needs no WooCommerce APIs,
  * so it is safe even though WooCommerce may not be loaded yet on the activation request.
  */
 function quissly_activate() {
 	require_once QUISSLY_PLUGIN_DIR . 'sync/class-quissly-dirty-queue.php';
+	require_once QUISSLY_PLUGIN_DIR . 'includes/class-quissly-event-queue.php';
 
 	Quissly_Dirty_Queue::create_table();
+	Quissly_Event_Queue::create_table();
 	update_option( 'quissly_installed_version', QUISSLY_VERSION, false );
 }
 register_activation_hook( __FILE__, 'quissly_activate' );

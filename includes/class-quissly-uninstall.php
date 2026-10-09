@@ -28,8 +28,10 @@ class Quissly_Uninstall {
 
 		require_once QUISSLY_PLUGIN_DIR . 'sync/class-quissly-dirty-queue.php';
 		require_once QUISSLY_PLUGIN_DIR . 'sync/class-quissly-sync-log.php';
+		require_once QUISSLY_PLUGIN_DIR . 'includes/class-quissly-event-queue.php';
 
 		Quissly_Dirty_Queue::drop_table();
+		Quissly_Event_Queue::drop_table();
 		Quissly_Sync_Log::delete_log();
 
 		// Cancel any pending/recurring flush - runtime state, like the queue table above,
@@ -46,6 +48,14 @@ class Quissly_Uninstall {
 		// state, not configuration — remove unconditionally (like the queue table); a reinstall
 		// rebuilds them on the next sync.
 		$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_quissly_ingested'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		// The "purchase sent" marker on orders (Quissly_Events::PURCHASE_META) - runtime state
+		// too. Orders live in postmeta, or in wc_orders_meta under HPOS.
+		$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_quissly_purchase_recorded'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$orders_meta = $wpdb->prefix . 'wc_orders_meta';
+		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $orders_meta ) ) === $orders_meta ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->query( "DELETE FROM {$orders_meta} WHERE meta_key = '_quissly_purchase_recorded'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		}
 
 		if ( $preserve ) {
 			return;

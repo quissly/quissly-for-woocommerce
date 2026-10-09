@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -37,6 +37,14 @@ consented to statistics cookies, no cookie is set and the search is sent without
 id. Searching works the same either way. Without such a banner the cookie is set on a
 visitor's first search.
 
+Shopping activity for Quissly's analytics (Quissly > Configuration, on by default): product
+page views, searches, adds to cart (and to the wishlist with YITH WooCommerce Wishlist) and
+paid orders - an order counts once it reaches Processing or Completed - are sent to Quissly
+for the analytics in the Quissly Admin Panel, as the Quissly Shopify app does. Product ids,
+quantities, prices and order totals with the visitor id above; never a name, email address,
+postal address or IP address. Nothing is recorded for a visitor who has not consented to
+statistics cookies (WP Consent API).
+
 A Quissly account (managed at admin.quissly.com) is required. The plugin is free and
 GPL-licensed; Quissly the service is the paid product.
 
@@ -53,6 +61,14 @@ The plugin updates itself. Once a day it checks the [plugin's GitHub releases](h
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.3 =
+* New: suggestions under the search bar. When the search overlay opens, the shopper sees your store's suggestions as buttons; one click searches. Automatic (Quissly picks them from your catalog) or Manual (you type up to 10).
+* New: search bar suggestions are made by Quissly from your catalog, each checked to find products.
+* New: shopping activity for the analytics in the Quissly Admin Panel - product views, searches, adds to cart and to the wishlist, paid orders. Never a customer's name, email, address or IP; nothing for a visitor without statistics consent. Can be switched off in Configuration.
+* New: Billing offers automatic top-up, shows each extra request's price, and lets you request a refund.
+* Changed: the Quissly menu shows Quissly's own icon.
+* Fixed: a product with very many options or a very long name no longer stops the search bar suggestions from being made.
 
 = 1.0.2 =
 * New: the plugin updates itself. Once a day it checks for a new release, signed by Quissly, and WordPress installs it in the background.

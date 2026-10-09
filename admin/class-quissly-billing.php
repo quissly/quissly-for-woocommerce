@@ -32,6 +32,26 @@ class Quissly_Billing extends Quissly_Setup {
 	/** One message for the reload after an action (user meta key prefix). */
 	const FLASH = 'quissly_billing_flash';
 
+	/** Refund refusals a person can still look at (POST /refund-claim); others need no claim. */
+	const CLAIMABLE = array( 'used', 'too_old', 'carried_extras', 'unpaid', 'ended' );
+
+	/** A refund claim's length, as Quissly accepts it. */
+	const CLAIM_MIN = 10;
+	const CLAIM_MAX = 4000;
+
+	/** Automatic top-up's maximum a month: one block at least, 50 at most (Quissly refuses outside). */
+	const TOPUP_MAX_BLOCKS = 50;
+
+	/** The maximum suggested when it is first switched on, in blocks. */
+	const TOPUP_DEFAULT_BLOCKS = 3;
+
+	/** The policies the billing screen links to. */
+	const LINKS = array(
+		'refund'  => 'https://quissly.com/legal/refund-policy',
+		'terms'   => 'https://quissly.com/legal/terms',
+		'privacy' => 'https://quissly.com/legal/privacy-policy',
+	);
+
 	/** @var Quissly_Store_Billing */
 	private $billing;
 
@@ -76,9 +96,14 @@ class Quissly_Billing extends Quissly_Setup {
 		$cycle   = isset( $_POST['billing_cycle'] ) ? sanitize_key( wp_unslash( $_POST['billing_cycle'] ) ) : '';
 		$family  = isset( $_POST['family'] ) ? sanitize_key( wp_unslash( $_POST['family'] ) ) : '';
 		$key     = isset( $_POST['idempotency_key'] ) ? sanitize_text_field( wp_unslash( $_POST['idempotency_key'] ) ) : '';
+		$more    = array(
+			'auto_topup_max_usd' => isset( $_POST['auto_topup_max_usd'] ) ? (float) wp_unslash( $_POST['auto_topup_max_usd'] ) : 0.0,
+			'max_usd'            => isset( $_POST['max_usd'] ) ? (float) wp_unslash( $_POST['max_usd'] ) : 0.0,
+			'reason'             => isset( $_POST['reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['reason'] ) ) : '',
+		);
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		wp_send_json( $this->manage( $op, $id, $plan_id, $cycle, $family, $key ) );
+		wp_send_json( $this->manage( $op, $id, $plan_id, $cycle, $family, $key, $more ) );
 	}
 
 	/**
@@ -90,12 +115,13 @@ class Quissly_Billing extends Quissly_Setup {
 	 * @param string $cycle   monthly|annual (checkout).
 	 * @param string $family  qsearch|qchat (check).
 	 * @param string $key     Idempotency key (topup).
+	 * @param array  $more    auto_topup_max_usd (checkout), max_usd (auto_topup), reason (refund_claim).
 	 * @return array
 	 */
-	public function manage( $op, $id, $plan_id = '', $cycle = '', $family = '', $key = '' ) {
+	public function manage( $op, $id, $plan_id = '', $cycle = '', $family = '', $key = '', array $more = array() ) {
 		switch ( $op ) {
 			case 'checkout':
-				$checkout = $this->billing->checkout( $plan_id, $cycle );
+				$checkout = $this->billing->checkout( $plan_id, $cycle, max( 0.0, isset( $more['auto_topup_max_usd'] ) ? (float) $more['auto_topup_max_usd'] : 0.0 ) );
 				if ( $checkout['ok'] && 'free_activated' === $checkout['kind'] ) {
 					self::flash( __( 'The free plan is on.', 'quissly-for-woocommerce' ) );
 					return array( 'ok' => true, 'done' => true );
@@ -167,6 +193,68 @@ class Quissly_Billing extends Quissly_Setup {
 				}
 				return $this->done( $result );
 
+			case 'auto_topup':
+				$max    = max( 0.0, round( isset( $more['max_usd'] ) ? (float) $more['max_usd'] : 0.0, 2 ) );
+				$result = $this->billing->manage( $op, $id, array( 'max_usd' => $max ) );
+				if ( $result['ok'] ) {
+					self::flash(
+						$max > 0
+							/* translators: %s: monthly maximum. */
+							? sprintf( __( 'Automatic top-up is on: up to %s a month.', 'quissly-for-woocommerce' ), $this->amount( $max, 'USD' ) )
+							: __( 'Automatic top-up is off.', 'quissly-for-woocommerce' )
+					);
+				}
+				return $this->done( $result );
+
+			case 'refund_preview':
+				$result = $this->billing->manage( $op, $id );
+				$data   = $result['data'];
+				$reason = isset( $data['reason'] ) ? (string) $data['reason'] : '';
+				return $result['ok']
+					? array(
+						'ok'       => true,
+						'eligible' => ! empty( $data['eligible'] ),
+						'claim'    => empty( $data['eligible'] ) && in_array( $reason, self::CLAIMABLE, true ),
+						'summary'  => $this->refund_summary( $data ),
+					)
+					: array( 'ok' => false, 'message' => $result['message'] );
+
+			case 'refund':
+				$result = $this->billing->manage( $op, $id );
+				if ( $result['ok'] ) {
+					$data   = $result['data'];
+					$amount = $this->amount( isset( $data['amount'] ) ? $data['amount'] : 0, isset( $data['currency'] ) ? (string) $data['currency'] : 'USD' );
+					self::flash(
+						! empty( $data['ends_plan'] )
+							/* translators: %s: amount refunded. */
+							? sprintf( __( 'Refund requested: %s goes back to your card within a few days. The plan has ended.', 'quissly-for-woocommerce' ), $amount )
+							/* translators: %s: amount refunded. */
+							: sprintf( __( 'Refund requested: %s goes back to your card within a few days. The extra requests it paid for were removed.', 'quissly-for-woocommerce' ), $amount )
+					);
+				}
+				return $this->done( $result );
+
+			case 'refund_claim':
+				$reason = trim( isset( $more['reason'] ) ? (string) $more['reason'] : '' );
+				$length = function_exists( 'mb_strlen' ) ? mb_strlen( $reason ) : strlen( $reason );
+				if ( $length < self::CLAIM_MIN || $length > self::CLAIM_MAX ) {
+					/* translators: 1: fewest characters, 2: most characters. */
+					return array( 'ok' => false, 'message' => sprintf( __( 'Tell us what happened in %1$d to %2$d characters.', 'quissly-for-woocommerce' ), self::CLAIM_MIN, self::CLAIM_MAX ) );
+				}
+				$result = $this->billing->manage( $op, $id, array( 'reason' => $reason ) );
+				if ( $result['ok'] ) {
+					$data = $result['data'];
+					self::flash(
+						sprintf(
+							/* translators: 1: ticket number, 2: business days. */
+							__( 'Your refund request was sent (ticket %1$s). A person replies within %2$d business days.', 'quissly-for-woocommerce' ),
+							isset( $data['ticket_number'] ) ? (string) $data['ticket_number'] : ( isset( $data['ticket_id'] ) ? (string) $data['ticket_id'] : '' ),
+							isset( $data['reply_within_business_days'] ) ? (int) $data['reply_within_business_days'] : 3
+						)
+					);
+				}
+				return $this->done( $result );
+
 			case 'payment_method':
 			case 'invoice_pdf':
 				$result = $this->billing->manage( $op, $id );
@@ -203,6 +291,29 @@ class Quissly_Billing extends Quissly_Setup {
 		}
 
 		return __( 'Your plan changes.', 'quissly-for-woocommerce' );
+	}
+
+	/**
+	 * What a refund would do now, or why it cannot be made automatically. Quissly's preview
+	 * carries the sentence itself; the claim's offer is added when a person can still look at it.
+	 *
+	 * @param array $preview {eligible, reason, message, amount, currency, ends_plan}.
+	 * @return string
+	 */
+	private function refund_summary( array $preview ) {
+		$message = trim( isset( $preview['message'] ) ? (string) $preview['message'] : '' );
+		if ( ! empty( $preview['eligible'] ) ) {
+			return '' !== $message ? $message : sprintf(
+				/* translators: %s: amount refunded. */
+				__( '%s goes back to your card.', 'quissly-for-woocommerce' ),
+				$this->amount( isset( $preview['amount'] ) ? $preview['amount'] : 0, isset( $preview['currency'] ) ? (string) $preview['currency'] : 'USD' )
+			);
+		}
+		if ( in_array( isset( $preview['reason'] ) ? (string) $preview['reason'] : '', self::CLAIMABLE, true ) ) {
+			return trim( $message . ' ' . __( 'You can still ask for a refund: tell us what happened, and a person replies within 3 business days.', 'quissly-for-woocommerce' ) );
+		}
+
+		return '' !== $message ? $message : __( 'This plan cannot be refunded.', 'quissly-for-woocommerce' );
 	}
 
 	/**
@@ -285,6 +396,16 @@ class Quissly_Billing extends Quissly_Setup {
 				'titlePay'      => __( 'Waiting for the payment', 'quissly-for-woocommerce' ),
 				'titleError'    => __( 'Something went wrong', 'quissly-for-woocommerce' ),
 				'confirmCancel' => __( 'Cancel plan', 'quissly-for-woocommerce' ),
+				'titleRefund'   => __( 'Request a refund', 'quissly-for-woocommerce' ),
+				'titleClaim'    => __( 'Ask for a refund', 'quissly-for-woocommerce' ),
+				'confirmRefund' => __( 'Refund', 'quissly-for-woocommerce' ),
+				'sendClaim'     => __( 'Send request', 'quissly-for-woocommerce' ),
+				/* translators: 1: fewest characters, 2: most characters. */
+				'claimLength'   => sprintf( __( 'Tell us what happened in %1$d to %2$d characters.', 'quissly-for-woocommerce' ), self::CLAIM_MIN, self::CLAIM_MAX ),
+				/* translators: Kept as %1 and %2: the page fills in the characters typed and the most allowed. */
+				'claimCount'    => __( '%1 / %2', 'quissly-for-woocommerce' ),
+				/* translators: Kept as %1 and %2: the page fills in the lowest and highest amounts. */
+				'topupRange'    => __( 'Enter a monthly maximum from %1 to %2.', 'quissly-for-woocommerce' ),
 			),
 		);
 	}
@@ -400,6 +521,9 @@ class Quissly_Billing extends Quissly_Setup {
 		if ( is_array( $extra ) ) {
 			/* translators: 1: price, 2: number of requests. */
 			$feats[] = sprintf( __( 'Extra requests: %1$s per %2$s', 'quissly-for-woocommerce' ), $this->money( (float) $extra['price'], $currency ), number_format_i18n( (int) $extra['requests'] ) );
+			if ( '' !== $this->rate( $extra, $family, $currency ) ) {
+				$feats[] = $this->rate( $extra, $family, $currency );
+			}
 			$feats[] = __( 'Unused extra requests carry over', 'quissly-for-woocommerce' );
 		} else {
 			$feats[] = __( 'No extra requests', 'quissly-for-woocommerce' );
@@ -417,7 +541,71 @@ class Quissly_Billing extends Quissly_Setup {
 				? sprintf( __( '%d-day free trial', 'quissly-for-woocommerce' ), $trial_days )
 				: '',
 			'feats'      => $feats,
+			'topup'      => $free ? null : $this->topup( $extra, $family, $currency ),
 		);
+	}
+
+	/**
+	 * Automatic top-up's limits and words for a plan that sells blocks; null for one that does not.
+	 *
+	 * @param mixed      $extra    The quota's extra_block.
+	 * @param string     $family   qsearch|qchat.
+	 * @param string     $currency Currency code.
+	 * @param float|null $current  The live plan's maximum, when it is on.
+	 * @return array|null {min, max, default, min_text, max_text, rate, hint}
+	 */
+	private function topup( $extra, $family, $currency, $current = null ) {
+		$price = is_array( $extra ) && isset( $extra['price'] ) ? (float) $extra['price'] : 0.0;
+		if ( $price <= 0 ) {
+			return null;
+		}
+		$max = $price * self::TOPUP_MAX_BLOCKS;
+
+		return array(
+			'min'      => self::number( $price ),
+			'max'      => self::number( $max ),
+			'default'  => self::number( null !== $current ? (float) $current : $price * self::TOPUP_DEFAULT_BLOCKS ),
+			'min_text' => $this->money( $price, $currency ),
+			'max_text' => $this->money( $max, $currency ),
+			'rate'     => $this->rate( $extra, $family, $currency ),
+			/* translators: 1: number of requests in a block, 2: block price. */
+			'hint'     => sprintf( __( 'One block of %1$s requests (%2$s) at a time, up to this much a month.', 'quissly-for-woocommerce' ), number_format_i18n( isset( $extra['requests'] ) ? (int) $extra['requests'] : 0 ), $this->money( $price, $currency ) ),
+		);
+	}
+
+	/**
+	 * What one extra request costs: "$0.003 per search", "$0.012 per AI message"; '' when unknown.
+	 *
+	 * @param mixed  $extra    The quota's extra_block.
+	 * @param string $family   qsearch|qchat.
+	 * @param string $currency Currency code.
+	 * @return string
+	 */
+	private function rate( $extra, $family, $currency ) {
+		$rate = is_array( $extra ) && isset( $extra['rate'] ) ? (float) $extra['rate'] : 0.0;
+		if ( $rate <= 0 ) {
+			return '';
+		}
+		$digits  = rtrim( number_format( $rate, 4, '.', '' ), '0' );
+		$digits  = strlen( substr( (string) strrchr( $digits, '.' ), 1 ) ) < 2 ? number_format( $rate, 2, '.', '' ) : $digits;
+		$symbols = array( 'USD' => '$', 'EUR' => '€', 'GBP' => '£' );
+		$amount  = isset( $symbols[ $currency ] ) ? $symbols[ $currency ] . $digits : $currency . ' ' . $digits;
+
+		return 'qchat' === $family
+			/* translators: %s: price of one AI message. */
+			? sprintf( __( '%s per AI message', 'quissly-for-woocommerce' ), $amount )
+			/* translators: %s: price of one search. */
+			: sprintf( __( '%s per search', 'quissly-for-woocommerce' ), $amount );
+	}
+
+	/**
+	 * A dollar figure for an input: "45", "15.5".
+	 *
+	 * @param float $value Amount.
+	 * @return string
+	 */
+	private static function number( $value ) {
+		return rtrim( rtrim( number_format( (float) $value, 2, '.', '' ), '0' ), '.' );
 	}
 
 	/**
@@ -443,6 +631,9 @@ class Quissly_Billing extends Quissly_Setup {
 		$pending    = isset( $cards[ $pending_id ] ) ? $cards[ $pending_id ] : null;
 		$extra      = isset( $card['raw']['quotas'][0]['extra_block'] ) ? $card['raw']['quotas'][0]['extra_block'] : null;
 		$id         = isset( $sub['id'] ) ? (string) $sub['id'] : '';
+		$family     = isset( $row['plan']['family'] ) ? (string) $row['plan']['family'] : ( null !== $card ? $card['family'] : '' );
+		$budget     = isset( $sub['overage_budget_usd'] ) ? (float) $sub['overage_budget_usd'] : 0.0;
+		$auto_on    = ! empty( $sub['auto_refill_enabled'] ) && $budget > 0;
 
 		$meta = array();
 		if ( $free ) {
@@ -450,6 +641,10 @@ class Quissly_Billing extends Quissly_Setup {
 		} elseif ( null !== $card ) {
 			/* translators: %s: price. */
 			$meta[] = $annual ? sprintf( __( '%s / year', 'quissly-for-woocommerce' ), $card['annual_total'] ) : sprintf( __( '%s / month', 'quissly-for-woocommerce' ), $card['monthly'] );
+		}
+		if ( $auto_on ) {
+			/* translators: %s: monthly maximum. */
+			$meta[] = sprintf( __( 'auto top-up up to %s a month', 'quissly-for-woocommerce' ), $this->money( $budget, $currency ) );
 		}
 		if ( '' !== $ends && ! $free ) {
 			if ( $cancelling ) {
@@ -504,6 +699,16 @@ class Quissly_Billing extends Quissly_Setup {
 			'can_cancel'       => $paddle && ! $cancelling,
 			'can_card'         => $paddle,
 			'can_topup'        => $paddle && is_array( $extra ) && 'active' === $status,
+			// Quissly allows it on a trial, active or past-due plan; never bought for one set to cancel.
+			'can_auto_topup'   => $paddle && is_array( $extra ) && in_array( $status, array( 'trial', 'active', 'past_due' ), true ) && ! $cancelling,
+			'auto_topup'       => array(
+				'on'    => $auto_on,
+				'label' => $auto_on
+					/* translators: %s: monthly maximum. */
+					? sprintf( __( 'Automatic top-up: up to %s a month.', 'quissly-for-woocommerce' ), $this->money( $budget, $currency ) )
+					: __( 'Automatic top-up is off.', 'quissly-for-woocommerce' ),
+			) + (array) $this->topup( $extra, $family, $currency, $auto_on ? $budget : null ),
+			'can_refund'       => $paddle && in_array( $status, array( 'active', 'past_due' ), true ),
 			'extra'            => is_array( $extra ) ? array(
 				'price'    => $this->money( (float) $extra['price'], $currency ),
 				'requests' => number_format_i18n( (int) $extra['requests'] ),

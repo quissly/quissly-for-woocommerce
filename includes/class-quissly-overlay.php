@@ -101,7 +101,34 @@ class Quissly_Overlay {
 			'labelClose'       => __( 'Close', 'quissly-for-woocommerce' ),
 			// Search bar suggestions, typed into the empty bar (Quissly_Search_Suggestions).
 			'suggestions'      => Quissly_Search_Suggestions::for_storefront(),
+			// ...and as buttons under the bar while it is empty (the merchant's switch, on by default).
+			'suggestionsPanel' => (bool) Quissly_Settings::get( 'quissly_overlay_suggestions' ),
+			// The buttons' own list: Quissly's generated one (automatic, the default) or the
+			// merchant's (manual) - never the typing list (the Shopify app's "Search suggestions").
+			'chips'            => self::chips(),
+			/* translators: %s: the store's name. */
+			'labelSuggestions' => '' !== trim( (string) get_bloginfo( 'name' ) ) ? sprintf( __( '%s suggestions', 'quissly-for-woocommerce' ), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) : __( 'Suggestions', 'quissly-for-woocommerce' ),
 		);
+	}
+
+	/**
+	 * The suggestion buttons: the merchant's own list (manual), or what Quissly generated for
+	 * the site's language (automatic, the default - none until Quissly has generated some).
+	 * Nothing while the section is switched off.
+	 *
+	 * @return string[]
+	 */
+	private static function chips() {
+		if ( ! Quissly_Settings::get( 'quissly_overlay_suggestions' ) ) {
+			return array();
+		}
+		if ( 'manual' === Quissly_Settings::get( 'quissly_overlay_suggestions_mode' ) ) {
+			$lines = preg_split( '/\R/u', (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ) );
+
+			return array_slice( Quissly_Search_Suggestions::clean( $lines ? $lines : array() ), 0, Quissly_Search_Suggestions::MAX_CHIPS );
+		}
+
+		return Quissly_Search_Suggestions::generated_for_storefront();
 	}
 
 	/**
@@ -142,6 +169,58 @@ class Quissly_Overlay {
 			/* Above the bar's drop shadow, which would otherwise grey the card's top. */
 			.quissly-overlay__results { position: relative; z-index: 1; }
 			.quissly-overlay__results:empty { display: none; }
+			/* Search bar suggestions as buttons under the bar, while it is empty. */
+			.quissly-overlay__suggest {
+			    position: relative; z-index: 1;
+			    box-sizing: border-box;
+			    padding: 20px 26px 22px;
+			    background: #fff;
+			    border-radius: 22px;
+			    box-shadow: 0 20px 55px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .1);
+			}
+			.quissly-overlay__suggest[hidden] { display: none; }
+			.quissly-overlay .quissly-overlay__suggest-title {
+			    display: flex; align-items: center; gap: 10px;
+			    margin: 0 0 14px; padding: 0 0 12px;
+			    border-bottom: 1px solid #ececf1;
+			    font-family: inherit; font-size: 13px; font-weight: 700;
+			    letter-spacing: .14em; text-transform: uppercase;
+			    color: #1d1d22;
+			}
+			.quissly-overlay .quissly-overlay__suggest-title svg {
+			    flex: 0 0 auto; width: 18px; height: 18px;
+			    fill: none; stroke: currentColor; stroke-width: 1.8;
+			    stroke-linecap: round; stroke-linejoin: round;
+			}
+			.quissly-overlay__chips { display: flex; flex-wrap: wrap; gap: 10px; }
+			.quissly-overlay .quissly-overlay__chip {
+			    display: inline-flex; align-items: center; gap: 10px;
+			    margin: 0; padding: 9px 14px 9px 16px;
+			    background: #fff; color: #1d1d22;
+			    border: 1px solid #ececf1; border-radius: 999px;
+			    box-shadow: 0 2px 6px rgba(0, 0, 0, .06);
+			    font-family: inherit; font-size: 15px; font-weight: 400; line-height: 1.2;
+			    text-transform: none; letter-spacing: normal;
+			    cursor: pointer;
+			    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+			}
+			.quissly-overlay .quissly-overlay__chip svg {
+			    flex: 0 0 auto; width: 15px; height: 15px;
+			    fill: none; stroke: currentColor; stroke-width: 2.2;
+			    stroke-linecap: round; stroke-linejoin: round;
+			}
+			.quissly-overlay .quissly-overlay__chip:hover {
+			    background: #fff; color: #1d1d22;
+			    border-color: #d6d6de; transform: translateY(-1px);
+			    box-shadow: 0 6px 14px rgba(0, 0, 0, .1);
+			}
+			.quissly-overlay .quissly-overlay__chip:focus-visible {
+			    outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, .35);
+			}
+			@media (max-width: 600px) {
+			    .quissly-overlay__suggest { padding: 16px 16px 18px; border-radius: 18px; }
+			    .quissly-overlay .quissly-overlay__chip { font-size: 14px; padding: 8px 12px 8px 14px; }
+			}
 			/* !important, same reasoning as .quissly-overlay__input: themes style bare
 			   buttons heavily (block themes give every button the accent colour). */
 			.quissly-overlay .quissly-overlay__close {

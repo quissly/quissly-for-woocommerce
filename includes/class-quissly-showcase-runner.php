@@ -1,6 +1,6 @@
 <?php
 /**
- * Showcase queries, generated in the background (port of the Shopify app's
+ * Search bar suggestions, asked of Quissly in the background (port of the Shopify app's
  * showcase-queries.server.ts).
  *
  * @package Quissly_For_WooCommerce
@@ -11,35 +11,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Generates a store's search bar suggestions from its own catalog - once, in the
- * background, after the first catalog sync:
+ * Asks Quissly for the store's search bar suggestions, in the background, and keeps track of
+ * when to ask - the Quissly Shopify app's showcase runner (the Magento and CS-Cart plugins have
+ * the same).
  *
- *  1. read catalog facts (the 100 most recently changed published products);
- *  2. build candidates (Quissly_Showcase_Queries) and RUN each through search - kept only
- *     with at least 2 results (up to 12 searches);
- *  3. fewer than 3 kept = the search index may still be filling: retry in an hour (at most
- *     6 attempts; the last one keeps whatever it found);
- *  4. write them as the list (Quissly_Search_Suggestions) - but ONLY while Quissly holds no
- *     list: a merchant's own list is never overwritten, even one written elsewhere.
+ * Quissly makes the suggestions (`POST /v2beta/qsearch/suggestions_enrich`,
+ * Quissly_Suggestions_Enrich): it writes them, checks each one finds products, and writes them
+ * into the QSearch widget_config itself - keeping any list the merchant edited, so nothing here
+ * needs to know about the merchant's own list. What this sends is what only WooCommerce knows:
+ * the store's language and its catalog (the 60 most recently changed published products).
  *
- * A merchant who saves their own list in Configuration (an actual change) ends it for
- * good; saving the page unchanged does not (the Shopify app stops on any save, which could
- * leave a store without suggestions forever). The generated list is kept either way, for
- * Configuration's "use the generated suggestions".
- *
- * After MAX_ATTEMPTS with nothing found it stops (the Shopify app's runner retries hourly
- * for ever). Runs from an hourly Action Scheduler action. On by default; the
- * `quissly_showcase_enabled` filter switches it off. Costs up to 12 searches per attempt,
- * which show as ordinary (unattributed) searches.
+ * When: after the first catalog sync (before it there is nothing to search). Right after the
+ * sync the index can still be filling - Quissly answers "insufficient" and this asks again in an
+ * hour; after MAX_ATTEMPTS it accepts a shorter list. Done once Quissly answers written or
+ * unchanged, until the store's language changes or the generator does (lists from an older one
+ * are made again once). Runs from an hourly Action Scheduler action. On by default; the
+ * `quissly_showcase_enabled` filter switches it off.
  */
 class Quissly_Showcase_Runner {
 
 	const HOOK   = 'quissly_showcase_tick';
 	const OPTION = 'quissly_showcase_state';
 
-	const MIN_ACCEPTABLE = 3;
-	const MAX_ATTEMPTS   = 6;
-	const LOCK_SECONDS   = 600;
+	const LOCK_SECONDS = 600;
+
+	/** One call can take minutes: a model call and up to 12 searches. */
+	const TIMEOUT_SECONDS = 180;
 
 	/**
 	 * Register the Action Scheduler handler and make sure the hourly tick is scheduled.
@@ -50,10 +47,10 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * Schedule the hourly tick once (Action Scheduler is up by init).
+	 * Schedule the hourly tick while something is outstanding (Action Scheduler is up by init).
 	 */
 	public function ensure_scheduled() {
-		if ( ! self::enabled() || ! function_exists( 'as_has_scheduled_action' ) || self::finished() ) {
+		if ( ! self::enabled() || ! function_exists( 'as_has_scheduled_action' ) || ! self::outstanding() ) {
 			return;
 		}
 		if ( ! as_has_scheduled_action( self::HOOK ) ) {
@@ -69,8 +66,8 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * The state: generated (string[]), generated_at, attempts, next_at, locked_at,
-	 * last_error, merchant_saved.
+	 * The state: generated_at, generator, language, generated (string[]), attempts, next_at,
+	 * locked_at, last_error, last_status.
 	 *
 	 * @return array
 	 */
@@ -88,18 +85,30 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * Nothing left to do: generated, or the merchant wrote their own list.
+	 * Quissly has made the list.
 	 *
 	 * @return bool
 	 */
 	public static function finished() {
-		$state = self::state();
-
-		return ! empty( $state['generated_at'] ) || ! empty( $state['merchant_saved'] );
+		return ! empty( self::state()['generated_at'] );
 	}
 
 	/**
-	 * The generated list (for Configuration), [] when none.
+	 * Something to ask for: never asked, the store's language changed, or an older generator.
+	 *
+	 * @return bool
+	 */
+	public static function outstanding() {
+		$state = self::state();
+
+		return empty( $state['generated_at'] )
+			|| Quissly_Suggestions_Enrich::GENERATOR !== ( $state['generator'] ?? '' )
+			|| self::language() !== ( $state['language'] ?? '' );
+	}
+
+	/**
+	 * What Quissly generated last, as it answered here ([] when nothing yet). Configuration
+	 * prefers Quissly's own copy (client_specific_queries_generated).
 	 *
 	 * @return string[]
 	 */
@@ -110,22 +119,24 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * A merchant wrote their own list: generation never writes after this.
+	 * The store's language as a widget_config key ("en", "ka", "pt-br").
+	 *
+	 * @return string
 	 */
-	public static function merchant_saved() {
-		self::update( array( 'merchant_saved' => true ) );
+	public static function language() {
+		return Quissly_Suggestions_Enrich::language_key( get_locale() );
 	}
 
 	/**
-	 * The hourly tick: generate when due.
+	 * The hourly tick: ask Quissly when due.
 	 *
 	 * @param int|null $now Time (tests).
 	 * @return string What happened (for the log / tests).
 	 */
 	public function tick( $now = null ) {
 		$now = null === $now ? time() : (int) $now;
-		if ( ! self::enabled() || self::finished() ) {
-			if ( function_exists( 'as_unschedule_all_actions' ) && self::finished() ) {
+		if ( ! self::enabled() || ! self::outstanding() ) {
+			if ( function_exists( 'as_unschedule_all_actions' ) && ! self::outstanding() ) {
 				as_unschedule_all_actions( self::HOOK );
 			}
 			return 'finished';
@@ -141,8 +152,8 @@ class Quissly_Showcase_Runner {
 			return 'locked';
 		}
 		self::update( array( 'locked_at' => $now ) );
-		$outcome = $this->generate( $now );
-		if ( self::finished() && function_exists( 'as_unschedule_all_actions' ) ) {
+		$outcome = $this->ask( $state, $now );
+		if ( ! self::outstanding() && function_exists( 'as_unschedule_all_actions' ) ) {
 			as_unschedule_all_actions( self::HOOK ); // done: nothing left to tick for.
 		}
 
@@ -150,75 +161,70 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * One attempt, end to end. Never throws.
+	 * One call, end to end. Never throws.
 	 *
-	 * @param int $now Time.
+	 * @param array $state The state before.
+	 * @param int   $now   Time.
 	 * @return string
 	 */
-	private function generate( $now ) {
+	private function ask( array $state, $now ) {
 		try {
-			$candidates = Quissly_Showcase_Queries::build_candidates( self::catalog_facts() );
-			if ( empty( $candidates ) ) {
-				return $this->retry( $now, DAY_IN_SECONDS, 'No published products to build suggestions from.', 'no_products' );
-			}
-
-			$client   = apply_filters( 'quissly_search_client', null );
-			$client   = $client instanceof Quissly_Search_Client ? $client : new Quissly_Live_Search_Client();
-			$accepted = Quissly_Showcase_Queries::validate(
-				$candidates,
-				static function ( $query ) use ( $client ) {
-					$response = $client->search(
-						array(
-							'query'            => $query,
-							'user_id'          => null, // unattributed, like the Shopify app's.
-							'page_number'      => 1,
-							'page_size'        => 5,
-							'sort_by'          => 0,
-							'include_metadata' => false,
-							'channel'          => 'web',
-						)
-					);
-					if ( null === $response ) {
-						throw new RuntimeException( 'search failed' );
-					}
-					$parsed = Quissly_Response_Parser::parse_search( $response );
-
-					return max( (int) $parsed['num_total_results'], count( $parsed['ids'] ) );
-				}
+			$language   = self::language();
+			$attempts   = (int) ( $state['attempts'] ?? 0 ) + 1;
+			$regenerate = ! empty( $state['generated_at'] ) && Quissly_Suggestions_Enrich::GENERATOR !== ( $state['generator'] ?? '' );
+			$body       = Quissly_Suggestions_Enrich::body(
+				$language,
+				array( $language ),
+				array( $language => self::catalog_facts() ),
+				array(
+					'main'        => self::generated(),
+					'by_language' => array(),
+				),
+				$regenerate ? 'regenerate' : 'fill',
+				$attempts >= Quissly_Suggestions_Enrich::MAX_ATTEMPTS
 			);
 
-			$attempts     = (int) ( self::state()['attempts'] ?? 0 ) + 1;
-			$last_attempt = $attempts >= self::MAX_ATTEMPTS;
-			if ( $last_attempt && empty( $accepted ) ) {
-				// Give up rather than spend searches every hour for ever (the Shopify app's
-				// runner keeps retrying); the merchant can still write a list.
-				self::update( array( 'generated' => array(), 'generated_at' => $now, 'attempts' => $attempts, 'locked_at' => 0, 'last_error' => 'No candidate search returned results after ' . $attempts . ' attempts.' ) );
-				return 'gave_up';
+			$private = ( new Quissly_Key_Store() )->get_private_key();
+			if ( ! $private ) {
+				return $this->retry( $now, HOUR_IN_SECONDS, 'Not connected.', 'not_ready' );
 			}
-			if ( count( $accepted ) < self::MIN_ACCEPTABLE && ! ( $last_attempt && count( $accepted ) > 0 ) ) {
-				// Most likely the search index is still filling after the first sync.
-				/* translators: 1: kept, 2: tried. */
-				return $this->retry( $now, HOUR_IN_SECONDS, sprintf( 'Only %1$d of %2$d candidate searches returned results.', count( $accepted ), count( $candidates ) ), 'only_' . count( $accepted ) . '_validated' );
+			$client   = new Quissly_Http_Client( Quissly_Env::token(), Quissly_Env::environment(), new Quissly_Signer( $private ) );
+			$response = $client->post_v2( Quissly_Suggestions_Enrich::PATH, $body, self::TIMEOUT_SECONDS );
+			if ( is_wp_error( $response ) || $response['code'] < 200 || $response['code'] >= 300 || ! is_array( $response['body'] ) ) {
+				$error = is_wp_error( $response ) ? 'suggestions_enrich transport error' : 'suggestions_enrich http=' . (int) $response['code'];
+				return $this->retry( $now, HOUR_IN_SECONDS, $error, 'error' );
 			}
 
-			$queries = Quissly_Showcase_Queries::pick( $accepted );
-			$current = Quissly_Search_Suggestions::read();
-			if ( null === $current ) {
-				return $this->retry( $now, HOUR_IN_SECONDS, 'Quissly could not be read.', 'unreadable' );
+			$status = isset( $response['body']['status'] ) ? (string) $response['body']['status'] : '';
+			$next   = Quissly_Suggestions_Enrich::schedule( $status );
+			if ( ! $next['done'] ) {
+				return $this->retry( $now, $next['retry'], $next['reason'], '' !== $status ? $status : 'error' );
 			}
-			if ( ! empty( $current['queries'] ) || ! empty( self::state()['merchant_saved'] ) ) {
-				// Someone already wrote a list: keep theirs, remember ours for "use generated".
-				self::update( array( 'generated' => $queries, 'generated_at' => $now, 'attempts' => $attempts, 'locked_at' => 0, 'last_error' => '' ) );
-				return 'kept_existing';
-			}
-			$error = Quissly_Search_Suggestions::save( $current['enabled'], $queries );
-			if ( '' !== $error ) {
-				return $this->retry( $now, HOUR_IN_SECONDS, $error, 'write_failed' );
-			}
-			self::update( array( 'generated' => $queries, 'generated_at' => $now, 'attempts' => $attempts, 'locked_at' => 0, 'last_error' => '' ) );
-			Quissly_Sync_Log::log( 'Search bar suggestions generated from the catalog: ' . count( $queries ) . '.' );
 
-			return 'written';
+			$main = Quissly_Search_Suggestions::clean( $response['body']['main'] ?? array() );
+			if ( empty( $main ) ) {
+				$main = Quissly_Search_Suggestions::clean( $response['body']['languages'][ $language ] ?? array() );
+			}
+			self::update(
+				array(
+					'generated_at' => (int) ( $state['generated_at'] ?? 0 ) ? (int) $state['generated_at'] : $now,
+					'generator'    => Quissly_Suggestions_Enrich::GENERATOR,
+					'language'     => $language,
+					'generated'    => ! empty( $main ) ? $main : ( $state['generated'] ?? array() ),
+					'attempts'     => 0,
+					'next_at'      => 0,
+					'locked_at'    => 0,
+					'last_error'   => '',
+					'last_status'  => $status,
+				)
+			);
+			if ( 'written' === $status ) {
+				// The overlay's list is cached for the storefront: show the new one at once.
+				delete_transient( Quissly_Search_Suggestions::CACHE );
+				Quissly_Sync_Log::log( 'Search bar suggestions written by Quissly.' );
+			}
+
+			return $status;
 		} catch ( \Throwable $e ) {
 			return $this->retry( $now, HOUR_IN_SECONDS, substr( $e->getMessage(), 0, 300 ), 'error' );
 		}
@@ -236,10 +242,11 @@ class Quissly_Showcase_Runner {
 	private function retry( $now, $in, $error, $outcome ) {
 		self::update(
 			array(
-				'attempts'   => (int) ( self::state()['attempts'] ?? 0 ) + 1,
-				'next_at'    => $now + $in,
-				'locked_at'  => 0,
-				'last_error' => $error,
+				'attempts'    => (int) ( self::state()['attempts'] ?? 0 ) + 1,
+				'next_at'     => $now + $in,
+				'locked_at'   => 0,
+				'last_error'  => $error,
+				'last_status' => $outcome,
 			)
 		);
 
@@ -247,14 +254,14 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * Catalog facts for Quissly_Showcase_Queries: the 100 most recently changed published
-	 * products - title, category (the deepest), brand, attributes with their values, price.
+	 * Catalog facts for Quissly's suggestion generator: the 60 most recently changed published
+	 * products - title, category (the deepest), brand, attributes with their values, price range.
 	 *
 	 * @return array
 	 */
 	public static function catalog_facts() {
 		$products = array();
-		foreach ( wc_get_products( array( 'limit' => 100, 'status' => 'publish', 'orderby' => 'modified', 'order' => 'DESC' ) ) as $product ) {
+		foreach ( wc_get_products( array( 'limit' => Quissly_Suggestions_Enrich::MAX_PRODUCTS, 'status' => 'publish', 'orderby' => 'modified', 'order' => 'DESC' ) ) as $product ) {
 			$options = array();
 			foreach ( $product->get_attributes() as $attribute ) {
 				if ( ! is_a( $attribute, 'WC_Product_Attribute' ) ) {
@@ -274,6 +281,7 @@ class Quissly_Showcase_Runner {
 				$options[] = array( 'name' => wc_attribute_label( $attribute->get_name(), $product ), 'values' => $split );
 			}
 			$price      = $product->is_type( 'variable' ) ? $product->get_variation_price( 'min' ) : $product->get_price();
+			$max_price  = $product->is_type( 'variable' ) ? $product->get_variation_price( 'max' ) : $price;
 			$products[] = array(
 				'title'        => $product->get_name(),
 				'product_type' => self::deepest_category( $product->get_id() ),
@@ -281,6 +289,7 @@ class Quissly_Showcase_Runner {
 				'vendor'       => self::brand( $product ),
 				'options'      => $options,
 				'min_price'    => is_numeric( $price ) ? (float) $price : null,
+				'max_price'    => is_numeric( $max_price ) ? (float) $max_price : null,
 			);
 		}
 

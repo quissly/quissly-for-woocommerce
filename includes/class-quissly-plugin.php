@@ -87,7 +87,7 @@ final class Quissly_Plugin {
 			'frontend/class-quissly-variant-deeplink.php',
 			'includes/class-quissly-search-signal.php',
 			'includes/class-quissly-search-suggestions.php',
-			'includes/class-quissly-showcase-queries.php',
+			'includes/class-quissly-suggestions-enrich.php',
 			'includes/class-quissly-showcase-runner.php',
 			'frontend/class-quissly-search-origin.php',
 			'frontend/class-quissly-search-interceptor.php',
@@ -99,6 +99,10 @@ final class Quissly_Plugin {
 			'widgets/class-quissly-qchat.php',
 			'frontend/class-quissly-chat-cart.php',
 			'includes/class-quissly-overlay.php',
+			'includes/class-quissly-event-body.php',
+			'includes/class-quissly-event-outcome.php',
+			'includes/class-quissly-event-queue.php',
+			'includes/class-quissly-events.php',
 			'admin/class-quissly-settings.php',
 			'admin/class-quissly-wizard.php',
 			'includes/class-quissly-description-draft.php',
@@ -189,6 +193,10 @@ final class Quissly_Plugin {
 		// Search overlay footer injection. Gates internally on search-enabled + the
 		// first-sync gate, so always safe to hook.
 		( new Quissly_Overlay() )->register();
+
+		// Shopping activity for Quissly's analytics. Gates internally on its switch + a
+		// connected store; the send action and the wc-ajax endpoint must exist on every request.
+		( new Quissly_Events() )->register();
 
 		$use_mock = defined( 'QUISSLY_USE_MOCK_SEARCH' ) && QUISSLY_USE_MOCK_SEARCH;
 		if ( $use_mock ) {

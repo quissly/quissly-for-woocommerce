@@ -93,6 +93,24 @@ class Quissly_Admin {
 	}
 
 	/**
+	 * The menu's icon: Quissly's own mark (the speech-bubble q, as the Shopify app's icon and the
+	 * Magento plugin's menu entry) instead of a dashicon. An SVG data URI, which WordPress
+	 * repaints in the admin colour scheme's icon colours, like its own icons.
+	 *
+	 * @return string
+	 */
+	public static function menu_icon() {
+		$svg = (string) file_get_contents( QUISSLY_PLUGIN_DIR . 'assets/images/quissly-mark.svg' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- a local plugin file.
+		if ( '' === $svg ) {
+			return 'dashicons-search';
+		}
+		// WordPress's svg-painter recolours the fill it finds, so the mark needs one.
+		$svg = str_replace( '<path ', '<path fill="black" ', $svg );
+
+		return 'data:image/svg+xml;base64,' . base64_encode( $svg ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- WordPress's own format for an SVG menu icon.
+	}
+
+	/**
 	 * Register the top-level menu and submenus.
 	 */
 	public function register_menus() {
@@ -102,7 +120,7 @@ class Quissly_Admin {
 			self::CAP,
 			self::MENU_SLUG,
 			array( $this, 'render_dashboard' ),
-			'dashicons-search',
+			self::menu_icon(),
 			58
 		);
 		// Magento's three entries in Magento's order: Configuration, Dashboard, Quissly Admin
@@ -209,6 +227,7 @@ class Quissly_Admin {
 		$this->toggle_row( 'quissly_enable_voice', __( 'Voice search', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_image', __( 'Image search', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_qchat', __( 'QChat assistant', 'quissly-for-woocommerce' ) );
+		$this->toggle_row( 'quissly_enable_events', __( 'Shopping activity for Quissly analytics', 'quissly-for-woocommerce' ) );
 		echo '</tbody></table>';
 		submit_button( __( 'Save features', 'quissly-for-woocommerce' ) );
 		echo '</form>';
@@ -323,6 +342,7 @@ class Quissly_Admin {
 		$this->toggle_row( 'quissly_enable_voice', __( 'Enable voice search', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_image', __( 'Enable image search', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_qchat', __( 'Enable QChat', 'quissly-for-woocommerce' ) );
+		$this->toggle_row( 'quissly_enable_events', __( 'Shopping activity for Quissly analytics', 'quissly-for-woocommerce' ), __( 'Sends product page views, searches, adds to cart and to the wishlist (YITH WooCommerce Wishlist), and paid orders to Quissly, for the analytics in the Quissly Admin Panel. Products and order totals only - never a customer\'s name, email, address or IP. A guest who has not consented to statistics cookies is not tracked. On by default.', 'quissly-for-woocommerce' ) );
 
 		// Quick layout.
 		$layout = Quissly_Settings::get( 'quissly_quick_layout' );
@@ -339,6 +359,24 @@ class Quissly_Admin {
 		$this->text_row( 'quissly_search_selector_mobile', __( 'Search box selector (mobile, advanced)', 'quissly-for-woocommerce' ) );
 
 		$this->toggle_row( 'quissly_enable_overlay', __( 'Search overlay takes over the theme\'s search box', 'quissly-for-woocommerce' ) );
+		$this->toggle_row( 'quissly_overlay_suggestions', __( 'Suggestions under the search bar', 'quissly-for-woocommerce' ) );
+
+		// Which ones: the Shopify app's "Search suggestions" setting, drawn as its segmented
+		// "Automatic | Manual" control (two radios; the list box shows only for Manual).
+		$mode = Quissly_Settings::get( 'quissly_overlay_suggestions_mode' );
+		echo '<tr><th scope="row">' . esc_html__( 'Search suggestions', 'quissly-for-woocommerce' ) . '</th><td>';
+		echo '<style>.q-segmented{display:inline-flex;gap:2px;padding:4px;border-radius:12px;background:#dcdcde}.q-segmented input{position:absolute;opacity:0;pointer-events:none}.q-segmented label{min-width:118px;padding:8px 22px;border-radius:9px;text-align:center;font-size:14px;line-height:20px;color:#303030;cursor:pointer}.q-segmented label:hover{background:rgba(0,0,0,.04)}.q-segmented input:checked+label{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.06)}.q-segmented input:focus-visible+label{outline:2px solid #2271b1;outline-offset:1px}</style>';
+		echo '<div class="q-segmented" role="radiogroup" aria-label="' . esc_attr__( 'Search suggestions', 'quissly-for-woocommerce' ) . '">';
+		foreach ( array( 'automatic' => __( 'Automatic', 'quissly-for-woocommerce' ), 'manual' => __( 'Manual', 'quissly-for-woocommerce' ) ) as $value => $label ) {
+			echo '<input type="radio" name="quissly_overlay_suggestions_mode" id="quissly_overlay_suggestions_mode_' . esc_attr( $value ) . '" value="' . esc_attr( $value ) . '"' . checked( $mode, $value, false ) . ' />';
+			echo '<label for="quissly_overlay_suggestions_mode_' . esc_attr( $value ) . '">' . esc_html( $label ) . '</label>';
+		}
+		echo '</div>';
+		echo '<p class="description">' . esc_html__( 'Buttons shown when search opens. Automatic: Quissly picks them from your catalog. Manual: you type them.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
+		echo '<tr id="quissly_overlay_suggestions_manual_row"' . ( 'manual' === $mode ? '' : ' hidden' ) . '><th scope="row"><label for="quissly_overlay_suggestions_manual">' . esc_html__( 'Your suggestions', 'quissly-for-woocommerce' ) . '</label></th><td>';
+		echo '<textarea name="quissly_overlay_suggestions_manual" id="quissly_overlay_suggestions_manual" rows="5" class="large-text" placeholder="' . esc_attr__( 'black shorts size 32', 'quissly-for-woocommerce' ) . '">' . esc_textarea( (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ) ) . '</textarea>';
+		echo '<p class="description">' . esc_html__( 'One per line, up to 10, each under 80 characters.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
+		echo '<script>document.querySelectorAll(\'input[name="quissly_overlay_suggestions_mode"]\').forEach(function(r){r.addEventListener(\'change\',function(){document.getElementById(\'quissly_overlay_suggestions_manual_row\').hidden=r.value!==\'manual\';});});</script>';
 		$this->text_row( 'quissly_overlay_mount_selector', __( 'Search button mount point', 'quissly-for-woocommerce' ), __( 'Only used when your theme has no search box. A CSS selector for an existing header control - your cart, account or language switcher - and the search button is placed just to its left. Leave empty to auto-detect: the cart, then the account link, then the language switcher, else a floating button at the bottom-left. Example: .site-header-cart', 'quissly-for-woocommerce' ) );
 
 		$this->toggle_row( 'quissly_preserve_on_uninstall', __( 'Preserve configuration on uninstall', 'quissly-for-woocommerce' ) );
@@ -379,7 +417,7 @@ class Quissly_Admin {
 		$count = sprintf( esc_html__( '%1$s of %2$d. 10 is usually more than enough, but you can add up to %2$d.', 'quissly-for-woocommerce' ), '<span id="quissly-suggestions-count">' . count( $current['queries'] ) . '</span>', Quissly_Search_Suggestions::MAX_COUNT );
 		echo '<p class="description">' . wp_kses( $count, array( 'span' => array( 'id' => true ) ) ) . '</p>';
 		echo '<script>' . str_replace( '__MAX__', (string) Quissly_Search_Suggestions::MAX_COUNT, '(function(){var t=document.getElementById("quissly_suggestions"),c=document.getElementById("quissly-suggestions-count");if(!t||!c){return;}function n(){var s={},k=0;t.value.split(/\r\n|\r|\n/).forEach(function(l){l=l.trim().toLowerCase();if(l&&!s[l]){s[l]=1;k++;}});c.textContent=k;c.parentNode.style.color=k>__MAX__?"#b32d2e":"";}t.addEventListener("input",n);n();})();' ) . '</script>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- a fixed script.
-		$generated = Quissly_Showcase_Runner::generated();
+		$generated = ! empty( $current['generated'] ) ? $current['generated'] : Quissly_Showcase_Runner::generated();
 		if ( ! empty( $generated ) && $generated !== $current['queries'] ) {
 			// "Reset to generated" (the Shopify app's): the list built from the catalog.
 			echo '<p style="margin-top:10px"><label><input type="checkbox" name="quissly_suggestions_use_generated" value="1" /> ' . esc_html__( 'Replace the list with the suggestions generated from your catalog:', 'quissly-for-woocommerce' ) . '</label></p>';
@@ -590,7 +628,8 @@ class Quissly_Admin {
 		if ( isset( $_POST['quissly_suggestions_present'] ) ) {
 			$text = isset( $_POST['quissly_suggestions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['quissly_suggestions'] ) ) : '';
 			if ( isset( $_POST['quissly_suggestions_use_generated'] ) ) {
-				$text = implode( "\n", Quissly_Showcase_Runner::generated() );
+				$read = Quissly_Search_Suggestions::read();
+				$text = implode( "\n", null !== $read && ! empty( $read['generated'] ) ? $read['generated'] : Quissly_Showcase_Runner::generated() );
 			}
 			$error = $this->save_search_suggestions( isset( $_POST['quissly_typing_enabled'] ), $text );
 			if ( '' !== $error ) {
@@ -634,22 +673,18 @@ class Quissly_Admin {
 		if ( null !== $current && $current['enabled'] === (bool) $enabled && $current['queries'] === $queries ) {
 			return ''; // unchanged: no write.
 		}
-		$error = Quissly_Search_Suggestions::save( $enabled, $queries );
-		if ( '' === $error && ( null === $current || $current['queries'] !== $queries ) ) {
-			// The merchant's own list from now on: generation never writes over it.
-			Quissly_Showcase_Runner::merchant_saved();
-		}
-
-		return $error;
+		// The merchant's own list from now on: Quissly's generator keeps any list that differs
+		// from what it generated, so nothing is recorded here.
+		return Quissly_Search_Suggestions::save( $enabled, $queries );
 	}
 
 	/**
-	 * Save the dashboard feature toggles (only the six enable flags).
+	 * Save the dashboard feature toggles (only the seven enable flags).
 	 */
 	public function handle_save_dashboard() {
 		$this->verify( 'quissly_dashboard' );
 
-		foreach ( array( 'quissly_enable_search', 'quissly_enable_overlay', 'quissly_enable_quick', 'quissly_enable_voice', 'quissly_enable_image', 'quissly_enable_qchat' ) as $key ) {
+		foreach ( array( 'quissly_enable_search', 'quissly_enable_overlay', 'quissly_enable_quick', 'quissly_enable_voice', 'quissly_enable_image', 'quissly_enable_qchat', 'quissly_enable_events' ) as $key ) {
 			Quissly_Settings::update( $key, isset( $_POST[ $key ] ) ? '1' : '0' );
 		}
 
@@ -779,11 +814,15 @@ class Quissly_Admin {
 	 *
 	 * @param string $key   Option key.
 	 * @param string $label Label.
+	 * @param string $help  Optional description.
 	 */
-	private function toggle_row( $key, $label ) {
+	private function toggle_row( $key, $label, $help = '' ) {
 		$checked = Quissly_Settings::get( $key ) ? ' checked' : '';
 		echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td>';
 		echo '<label><input type="checkbox" name="' . esc_attr( $key ) . '" value="1"' . $checked . ' /> ' . esc_html__( 'Enabled', 'quissly-for-woocommerce' ) . '</label>';
+		if ( '' !== $help ) {
+			echo '<p class="description">' . esc_html( $help ) . '</p>';
+		}
 		echo '</td></tr>';
 	}
 

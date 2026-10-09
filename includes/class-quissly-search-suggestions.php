@@ -29,9 +29,15 @@ class Quissly_Search_Suggestions {
 	const QUERIES_KEY = 'client_specific_queries';
 	const TYPING_KEY  = 'search_typing_enabled';
 
+	/** What Quissly's generator last wrote, {main, by_language} (written by Quissly, read only here). */
+	const GENERATED_KEY = 'client_specific_queries_generated';
+
 	/** At most this many suggestions, each at most MAX_LENGTH characters (as Shopify). */
 	const MAX_COUNT  = 20;
 	const MAX_LENGTH = 80;
+
+	/** Suggestion buttons under the overlay's bar, at most (the Shopify app's MAX_CHIPS). */
+	const MAX_CHIPS = 10;
 
 	/** The QSearch service's id (looked up once, then remembered). */
 	const OPTION_SERVICE_ID = 'quissly_search_service_id';
@@ -93,35 +99,89 @@ class Quissly_Search_Suggestions {
 	 * The suggestions a widget_config holds (null = no config row: typing on, none). PURE.
 	 *
 	 * @param array|null $config Decoded widget_config.
-	 * @return array{enabled:bool,queries:string[]}
+	 * @return array{enabled:bool,queries:string[],generated:string[],generated_by_language:array<string,string[]>}
 	 */
 	public static function from_config( $config ) {
-		$config = is_array( $config ) ? $config : array();
+		$config       = is_array( $config ) ? $config : array();
+		$generated    = isset( $config[ self::GENERATED_KEY ] ) && is_array( $config[ self::GENERATED_KEY ] ) ? $config[ self::GENERATED_KEY ] : array();
+		$per_language = array();
+		foreach ( (array) ( $generated['by_language'] ?? array() ) as $language => $queries ) {
+			$queries = self::clean( $queries );
+			if ( is_string( $language ) && '' !== $language && ! empty( $queries ) ) {
+				$per_language[ strtolower( $language ) ] = $queries;
+			}
+		}
 
 		return array(
-			'enabled' => ! ( array_key_exists( self::TYPING_KEY, $config ) && false === $config[ self::TYPING_KEY ] ),
-			'queries' => self::clean( $config[ self::QUERIES_KEY ] ?? array() ),
+			'enabled'               => ! ( array_key_exists( self::TYPING_KEY, $config ) && false === $config[ self::TYPING_KEY ] ),
+			'queries'               => self::clean( $config[ self::QUERIES_KEY ] ?? array() ),
+			// What Quissly's generator last wrote (its merchant-edit baseline): "Reset to generated".
+			'generated'             => self::clean( $generated['main'] ?? array() ),
+			'generated_by_language' => $per_language,
 		);
 	}
 
 	/**
-	 * What the storefront overlay types: the list when typing is on, else none. Cached
-	 * (a failed read is cached briefly too, so a Quissly outage costs one call a minute).
+	 * The overlay's Automatic suggestion buttons for a language: only what Quissly's generator
+	 * wrote, never the typing list - the Shopify app's chipsForLocale(). That language's list
+	 * first (then its base language's: the generator's main list stays the old one when the
+	 * merchant edited the typing list), else the generated main list; none before anything was
+	 * generated. At most MAX_CHIPS. PURE.
+	 *
+	 * @param array  $lists    from_config().
+	 * @param string $language Language key ("en", "pt-br").
+	 * @return string[]
+	 */
+	public static function pick_generated( array $lists, $language ) {
+		$by_language = (array) ( $lists['generated_by_language'] ?? array() );
+		$language    = strtolower( str_replace( '_', '-', trim( (string) $language ) ) );
+		foreach ( array( $language, explode( '-', $language )[0] ) as $key ) {
+			if ( '' !== $key && ! empty( $by_language[ $key ] ) ) {
+				return array_slice( array_values( $by_language[ $key ] ), 0, self::MAX_CHIPS );
+			}
+		}
+
+		return array_slice( array_values( (array) ( $lists['generated'] ?? array() ) ), 0, self::MAX_CHIPS );
+	}
+
+	/**
+	 * What the storefront overlay types: the list when typing is on, else none.
 	 *
 	 * @return string[]
 	 */
 	public static function for_storefront() {
+		$lists = self::storefront_lists();
+
+		return $lists['enabled'] ? $lists['queries'] : array();
+	}
+
+	/**
+	 * The overlay's Automatic suggestion buttons, for the site's language (pick_generated()).
+	 *
+	 * @return string[]
+	 */
+	public static function generated_for_storefront() {
+		return self::pick_generated( self::storefront_lists(), Quissly_Suggestions_Enrich::language_key( get_locale() ) );
+	}
+
+	/**
+	 * Quissly's lists for the storefront, cached (a failed read is cached briefly too, so a
+	 * Quissly outage costs one call a minute). The stored service id only: a shopper's page
+	 * never waits on a console lookup (Configuration looks it up and stores it).
+	 *
+	 * @return array from_config().
+	 */
+	private static function storefront_lists() {
 		$cached = get_transient( self::CACHE );
-		if ( is_array( $cached ) ) {
+		// A list cached before the generated lists were (a plain string[]) is read again.
+		if ( is_array( $cached ) && isset( $cached['queries'], $cached['generated_by_language'] ) ) {
 			return $cached;
 		}
-		// The stored service id only: a shopper's page never waits on a console lookup
-		// (Configuration looks it up and stores it).
-		$read    = self::read( false );
-		$queries = ( null !== $read && $read['enabled'] ) ? $read['queries'] : array();
-		set_transient( self::CACHE, $queries, null === $read ? MINUTE_IN_SECONDS : self::CACHE_TTL );
+		$read  = self::read( false );
+		$lists = null !== $read ? $read : self::from_config( array( self::TYPING_KEY => false ) );
+		set_transient( self::CACHE, $lists, null === $read ? MINUTE_IN_SECONDS : self::CACHE_TTL );
 
-		return $queries;
+		return $lists;
 	}
 
 	/**

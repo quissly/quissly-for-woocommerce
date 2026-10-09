@@ -57,6 +57,14 @@ class Quissly_Settings {
 			// Quissly_Overlay's docblock.
 			'quissly_enable_overlay'          => array( 'default' => true, 'type' => 'bool' ),
 			'quissly_overlay_mount_selector'  => array( 'default' => '', 'type' => 'text' ),
+			// The search bar suggestions as buttons under the overlay's bar (on by default).
+			'quissly_overlay_suggestions'     => array( 'default' => true, 'type' => 'bool' ),
+			// Which ones (the Shopify app's "Search suggestions" setting): what Quissly generated
+			// (automatic) or the merchant's own list, one per line (manual).
+			'quissly_overlay_suggestions_mode'   => array( 'default' => 'automatic', 'type' => 'suggestions_mode' ),
+			'quissly_overlay_suggestions_manual' => array( 'default' => '', 'type' => 'lines' ),
+			// Shopping activity for Quissly's analytics (Quissly_Events; on by default).
+			'quissly_enable_events'           => array( 'default' => true, 'type' => 'bool' ),
 			// Explicit X-Environment override (empty = auto-detect from WP_ENVIRONMENT_TYPE). The
 			// only way, besides QUISSLY_ENV, to select demo/test (no WP type maps to those).
 			'quissly_environment'             => array( 'default' => '', 'type' => 'text' ),
@@ -146,6 +154,10 @@ class Quissly_Settings {
 				return self::sanitize_service_id( $raw );
 			case 'label':
 				return self::sanitize_label( $raw, $schema[ $key ]['default'] );
+			case 'suggestions_mode':
+				return 'manual' === $raw ? 'manual' : 'automatic';
+			case 'lines':
+				return self::sanitize_lines( $raw );
 			case 'text':
 			default:
 				return sanitize_text_field( (string) $raw );
@@ -196,6 +208,25 @@ class Quissly_Settings {
 		}
 
 		return (bool) $value;
+	}
+
+	/**
+	 * The merchant's own suggestion buttons: one per line, cleaned (Quissly_Search_Suggestions::clean),
+	 * at most Quissly_Search_Suggestions::MAX_CHIPS, each cut at MAX_LENGTH characters.
+	 *
+	 * @param mixed $value Raw.
+	 * @return string
+	 */
+	public static function sanitize_lines( $value ) {
+		$lines = Quissly_Search_Suggestions::clean( preg_split( '/\R/u', strip_tags( (string) $value ) ) ?: array() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags -- pure (unit-tested, no WP).
+		$lines = array_map(
+			static function ( $line ) {
+				return mb_substr( $line, 0, Quissly_Search_Suggestions::MAX_LENGTH );
+			},
+			array_slice( $lines, 0, Quissly_Search_Suggestions::MAX_CHIPS )
+		);
+
+		return implode( "\n", $lines );
 	}
 
 	/**

@@ -71,19 +71,21 @@ class Quissly_Store_Billing {
 	/**
 	 * Start a plan: a payment link to open, or the free plan switched on now.
 	 *
-	 * @param string $plan_id       Plan id.
-	 * @param string $billing_cycle monthly|annual.
+	 * @param string $plan_id         Plan id.
+	 * @param string $billing_cycle   monthly|annual.
+	 * @param float  $auto_topup_max  Automatic top-up's maximum a month; 0 = off.
 	 * @return array{ok:bool,kind:string,pay_url:string,message:string}
 	 */
-	public function checkout( $plan_id, $billing_cycle ) {
-		$result = $this->request(
-			'POST',
-			'/checkout',
-			array(
-				'plan_id'       => (string) $plan_id,
-				'billing_cycle' => 'annual' === $billing_cycle ? 'annual' : 'monthly',
-			)
+	public function checkout( $plan_id, $billing_cycle, $auto_topup_max = 0.0 ) {
+		$body = array(
+			'plan_id'       => (string) $plan_id,
+			'billing_cycle' => 'annual' === $billing_cycle ? 'annual' : 'monthly',
 		);
+		if ( (float) $auto_topup_max > 0 ) {
+			// Asked before the card form opens: Paddle's form cannot carry it.
+			$body['auto_topup_max_usd'] = round( (float) $auto_topup_max, 2 );
+		}
+		$result = $this->request( 'POST', '/checkout', $body );
 		if ( ! $result['ok'] ) {
 			return array( 'ok' => false, 'kind' => '', 'pay_url' => '', 'message' => $result['message'] );
 		}
@@ -127,7 +129,8 @@ class Quissly_Store_Billing {
 	 * One plan-management call on a subscription.
 	 *
 	 * Ops: invoice_pdf (GET, id is the invoice), change_preview / change {plan_id},
-	 * topup_preview / topup {idempotency_key}, cancel, resume, abort, payment_method.
+	 * topup_preview / topup {idempotency_key}, cancel, resume, abort, payment_method,
+	 * auto_topup {max_usd}, refund_preview, refund, refund_claim {reason}.
 	 *
 	 * @param string $op   Operation.
 	 * @param string $id   Subscription id (invoice id for invoice_pdf).
@@ -145,6 +148,10 @@ class Quissly_Store_Billing {
 			'resume'         => array( 'POST', '/subscriptions/%s/resume' ),
 			'abort'          => array( 'POST', '/subscriptions/%s/abort-scheduled-change' ),
 			'payment_method' => array( 'POST', '/subscriptions/%s/payment-method' ),
+			'auto_topup'     => array( 'POST', '/subscriptions/%s/auto-topup' ),
+			'refund_preview' => array( 'POST', '/subscriptions/%s/refund/preview' ),
+			'refund'         => array( 'POST', '/subscriptions/%s/refund' ),
+			'refund_claim'   => array( 'POST', '/subscriptions/%s/refund-claim' ),
 		);
 		if ( ! isset( $routes[ $op ] ) || ! preg_match( '/^[0-9a-fA-F-]{36}$/', (string) $id ) ) {
 			return array( 'ok' => false, 'data' => array(), 'message' => $this->message( 0, '' ) );
