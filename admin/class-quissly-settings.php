@@ -63,6 +63,9 @@ class Quissly_Settings {
 			// (automatic) or the merchant's own list, one per line (manual).
 			'quissly_overlay_suggestions_mode'   => array( 'default' => 'automatic', 'type' => 'suggestions_mode' ),
 			'quissly_overlay_suggestions_manual' => array( 'default' => '', 'type' => 'lines' ),
+			// A multilingual store's other languages' manual lists, {language key: lines}; the
+			// main language's is the one above.
+			'quissly_overlay_suggestions_manual_by_language' => array( 'default' => array(), 'type' => 'lines_by_language' ),
 			// Shopping activity for Quissly's analytics (Quissly_Events; on by default).
 			'quissly_enable_events'           => array( 'default' => true, 'type' => 'bool' ),
 			// Explicit X-Environment override (empty = auto-detect from WP_ENVIRONMENT_TYPE). The
@@ -158,6 +161,8 @@ class Quissly_Settings {
 				return 'manual' === $raw ? 'manual' : 'automatic';
 			case 'lines':
 				return self::sanitize_lines( $raw );
+			case 'lines_by_language':
+				return self::sanitize_lines_by_language( $raw );
 			case 'text':
 			default:
 				return sanitize_text_field( (string) $raw );
@@ -227,6 +232,26 @@ class Quissly_Settings {
 		);
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Lists per language, {language key ("en", "pt-br"): lines (sanitize_lines())}; an empty
+	 * list is left out. Pure.
+	 *
+	 * @param mixed $value Raw.
+	 * @return array<string,string>
+	 */
+	public static function sanitize_lines_by_language( $value ) {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $language => $lines ) {
+			$language = strtolower( (string) preg_replace( '/[^A-Za-z-]/', '', (string) $language ) );
+			$lines    = self::sanitize_lines( is_string( $lines ) ? $lines : '' );
+			if ( '' !== $language && '' !== $lines ) {
+				$out[ $language ] = $lines;
+			}
+		}
+
+		return $out;
 	}
 
 	/**

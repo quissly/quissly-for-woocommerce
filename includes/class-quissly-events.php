@@ -115,9 +115,10 @@ final class Quissly_Events {
 				if ( ! is_callable( array( $item, 'get_product_id' ) ) ) {
 					continue;
 				}
+				// Products as Quissly knows them (a multilingual store's main-language copies).
 				$lines[] = array(
-					'product_id' => (int) $item->get_product_id(),
-					'variant_id' => (int) $item->get_variation_id(),
+					'product_id' => Quissly_Languages::to_main( (int) $item->get_product_id() ),
+					'variant_id' => Quissly_Languages::to_main( (int) $item->get_variation_id() ),
 					'name'       => (string) $item->get_name(),
 					'quantity'   => (float) $item->get_quantity(),
 					'price'      => (float) $order->get_item_subtotal( $item, false, false ),
@@ -147,7 +148,7 @@ final class Quissly_Events {
 	 */
 	public function on_add_to_cart( $cart_item_key, $product_id, $quantity, $variation_id = 0 ) {
 		if ( (int) $product_id > 0 ) {
-			self::record_shopper( Quissly_Event_Body::ADD_TO_CART, Quissly_Event_Body::add_to_cart( (int) $product_id, (int) $variation_id, (float) $quantity ) );
+			self::record_shopper( Quissly_Event_Body::ADD_TO_CART, Quissly_Event_Body::add_to_cart( Quissly_Languages::to_main( (int) $product_id ), Quissly_Languages::to_main( (int) $variation_id ), (float) $quantity ) );
 		}
 	}
 
@@ -158,7 +159,7 @@ final class Quissly_Events {
 	 */
 	public function on_wishlist( $product_id ) {
 		if ( (int) $product_id > 0 ) {
-			self::record_shopper( Quissly_Event_Body::WISHLIST, Quissly_Event_Body::wishlist( (int) $product_id ) );
+			self::record_shopper( Quissly_Event_Body::WISHLIST, Quissly_Event_Body::wishlist( Quissly_Languages::to_main( (int) $product_id ) ) );
 		}
 	}
 
@@ -268,7 +269,7 @@ final class Quissly_Events {
 			if ( ! $product || 'publish' !== $product->get_status() ) {
 				return 400;
 			}
-			self::record_shopper( Quissly_Event_Body::VIEW, Quissly_Event_Body::view( $id ) );
+			self::record_shopper( Quissly_Event_Body::VIEW, Quissly_Event_Body::view( Quissly_Languages::to_main( $id ) ) );
 			return 204;
 		}
 		if ( Quissly_Event_Body::SEARCH === $type ) {

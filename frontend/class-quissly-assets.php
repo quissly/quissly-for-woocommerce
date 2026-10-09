@@ -85,6 +85,8 @@ class Quissly_Assets {
 		return array(
 			'restUrl'      => esc_url_raw( rest_url( Quissly_Proxy::NAMESPACE . '/' ) ),
 			'nonce'        => wp_create_nonce( 'wp_rest' ), // sent but not required (public endpoints).
+			// The page's language on a multilingual store ('' otherwise): Quick's rows are its.
+			'lang'         => Quissly_Languages::is_multilingual() ? Quissly_Languages::current_code() : '',
 			'selectors'    => array_merge( $overrides, self::SELECTOR_PRIORITY ),
 			'layout'       => Quissly_Settings::get( 'quissly_quick_layout' ),
 			'seeAllLabel'  => (string) Quissly_Settings::get( 'quissly_see_all_label' ),

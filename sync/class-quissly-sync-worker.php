@@ -227,10 +227,7 @@ class Quissly_Sync_Worker {
 	 * @return int Number of products enqueued.
 	 */
 	public function start_full_sync( $schedule = true ) {
-		$ids = function_exists( 'wc_get_products' )
-			? wc_get_products( array( 'limit' => -1, 'status' => 'publish', 'return' => 'ids' ) )
-			: array();
-
+		$ids   = $this->catalog_ids();
 		$queue = new Quissly_Dirty_Queue();
 		foreach ( $ids as $id ) {
 			$queue->enqueue( (int) $id, Quissly_Dirty_Queue::OP_UPSERT );
@@ -245,6 +242,33 @@ class Quissly_Sync_Worker {
 		}
 
 		return count( $ids );
+	}
+
+	/**
+	 * The published products a full sync sends. On a multilingual store, every language's
+	 * products are looked at (a multilingual plugin narrows a query to the admin's language
+	 * otherwise) and only the main language's go to Quissly, once each; a translation sent
+	 * before is queued for deletion (Quissly_Languages::keep_for_sync()).
+	 *
+	 * @return int[]
+	 */
+	public function catalog_ids() {
+		if ( ! Quissly_Languages::is_multilingual() ) {
+			return function_exists( 'wc_get_products' )
+				? array_map( 'intval', wc_get_products( array( 'limit' => -1, 'status' => 'publish', 'return' => 'ids' ) ) )
+				: array();
+		}
+		$all = get_posts( array( 'post_type' => 'product', 'post_status' => 'publish', 'numberposts' => -1, 'fields' => 'ids', 'suppress_filters' => true, 'lang' => '' ) );
+		$ids = array();
+		foreach ( $all as $id ) {
+			if ( Quissly_Languages::keep_for_sync( (int) $id ) ) {
+				$ids[] = (int) $id;
+			} elseif ( $this->is_ingested( (int) $id ) ) {
+				( new Quissly_Dirty_Queue() )->enqueue( (int) $id, Quissly_Dirty_Queue::OP_DELETE );
+			}
+		}
+
+		return $ids;
 	}
 
 	/**

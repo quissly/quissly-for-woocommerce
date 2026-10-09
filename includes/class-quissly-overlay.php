@@ -123,7 +123,15 @@ class Quissly_Overlay {
 			return array();
 		}
 		if ( 'manual' === Quissly_Settings::get( 'quissly_overlay_suggestions_mode' ) ) {
-			$lines = preg_split( '/\R/u', (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ) );
+			$text = (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' );
+			// A multilingual store: the shopper's language's list (none without one - never
+			// another language's buttons).
+			$current = Quissly_Languages::current_key();
+			if ( Quissly_Languages::is_multilingual() && $current !== Quissly_Languages::main_key() ) {
+				$by   = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
+				$text = (string) ( $by[ $current ] ?? $by[ explode( '-', $current )[0] ] ?? '' );
+			}
+			$lines = preg_split( '/\R/u', $text );
 
 			return array_slice( Quissly_Search_Suggestions::clean( $lines ? $lines : array() ), 0, Quissly_Search_Suggestions::MAX_CHIPS );
 		}

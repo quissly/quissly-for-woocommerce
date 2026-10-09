@@ -110,7 +110,7 @@ class Quissly_CLI {
 			WP_CLI::error( 'WooCommerce is not available.' );
 		}
 
-		$ids   = wc_get_products( array( 'limit' => -1, 'status' => 'publish', 'return' => 'ids' ) );
+		$ids   = ( new Quissly_Sync_Worker() )->catalog_ids(); // a multilingual store's main language only
 		$queue = new Quissly_Dirty_Queue();
 		foreach ( $ids as $id ) {
 			$queue->enqueue( (int) $id, Quissly_Dirty_Queue::OP_UPSERT );

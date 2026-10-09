@@ -221,8 +221,42 @@ class Quissly_Proxy {
 		}
 
 		$rows = $this->client()->suggest( $query, 10 );
+		$rows = self::rows_in_language( $rows, Quissly_Languages::code_for( (string) $request->get_param( 'lang' ) ) );
 
 		return new WP_REST_Response( array( 'suggestions' => array_values( $rows ) ), 200 );
+	}
+
+	/**
+	 * Quick's rows in a language: Quissly holds the main language's products, so on another
+	 * language's page each row becomes its translation - that product's name and link (its
+	 * price and image are the same product's). A row without a translation stays as it is.
+	 *
+	 * @param array  $rows Rows from Quissly ({id, title, url, ...}).
+	 * @param string $code The page's language (plugin code; '' = none given).
+	 * @return array
+	 */
+	public static function rows_in_language( array $rows, $code ) {
+		if ( '' === $code || $code === Quissly_Languages::main_code() ) {
+			return $rows;
+		}
+		$out  = array();
+		$seen = array();
+		foreach ( $rows as $row ) {
+			$id = Quissly_Languages::translate( (int) ( $row['id'] ?? 0 ), $code );
+			if ( isset( $seen[ $id ] ) ) {
+				continue;
+			}
+			$seen[ $id ] = true;
+			$product     = $id !== (int) ( $row['id'] ?? 0 ) ? wc_get_product( $id ) : null;
+			if ( $product ) {
+				$row['id']    = $id;
+				$row['title'] = $product->get_name();
+				$row['url']   = get_permalink( $id );
+			}
+			$out[] = $row;
+		}
+
+		return $out;
 	}
 
 	/**

@@ -362,11 +362,15 @@ class Quissly_Admin {
 		echo '</div>';
 		echo '<p class="description">' . esc_html__( 'Buttons shown when search opens. Automatic: Quissly picks them from your catalog. Manual: you type them.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
 		echo '<tr id="quissly_overlay_suggestions_manual_row"' . ( 'manual' === $mode ? '' : ' hidden' ) . '><th scope="row"><label for="quissly_overlay_suggestions_manual">' . esc_html__( 'Your examples', 'quissly-for-woocommerce' ) . '</label></th><td>';
-		$this->pills_list(
+		$manual_by_language = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
+		$this->language_lists(
 			'quissly_overlay_suggestions_manual',
 			(string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ),
-			Quissly_Search_Suggestions::MAX_CHIPS,
+			'quissly_overlay_suggestions_manual_by_language',
+			$manual_by_language,
 			array(),
+			array(),
+			Quissly_Search_Suggestions::MAX_CHIPS,
 			__( 'Add an example, e.g. black shorts size 32', 'quissly-for-woocommerce' ),
 			__( 'No examples yet - with none, no buttons are shown.', 'quissly-for-woocommerce' )
 		);
@@ -489,15 +493,68 @@ class Quissly_Admin {
 		$empty     = empty( $current['queries'] ) && ! Quissly_Showcase_Runner::finished() && Quissly_Showcase_Runner::enabled()
 			? __( 'Left empty, suggestions are generated from your catalog after the first catalog sync - each one checked to find products.', 'quissly-for-woocommerce' )
 			: __( 'No suggestions - the bar keeps its plain placeholder.', 'quissly-for-woocommerce' );
-		$this->pills_list(
+		$this->language_lists(
 			'quissly_suggestions',
 			implode( "\n", $current['queries'] ),
-			Quissly_Search_Suggestions::MAX_COUNT,
+			'quissly_suggestions_lang',
+			array_map(
+				static function ( $list ) {
+					return implode( "\n", $list );
+				},
+				$current['by_language']
+			),
 			$generated,
+			$current['generated_by_language'],
+			Quissly_Search_Suggestions::MAX_COUNT,
 			__( 'Add a suggestion, e.g. waterproof jacket', 'quissly-for-woocommerce' ),
 			$empty
 		);
 		echo '</td></tr>';
+	}
+
+	/**
+	 * A suggestion list per language (the Magento plugin's Language select): on a multilingual
+	 * store a Language select over one pill list per language, the main language's first (its
+	 * field is $name; another's is $name_by_language[key]); else the one list.
+	 *
+	 * @param string                 $name                  The main list's field.
+	 * @param string                 $value                 The main list, one per line.
+	 * @param string                 $name_by_language      The other languages' field.
+	 * @param array<string,string>   $by_language           Their lists, {key: lines}.
+	 * @param string[]               $generated             The main language's generated list.
+	 * @param array<string,string[]> $generated_by_language The others' generated lists.
+	 * @param int                    $max                   At most this many each.
+	 * @param string                 $placeholder           The add box's placeholder.
+	 * @param string                 $empty                 Shown while a list is empty.
+	 */
+	private function language_lists( $name, $value, $name_by_language, array $by_language, array $generated, array $generated_by_language, $max, $placeholder, $empty ) {
+		if ( ! Quissly_Languages::is_multilingual() ) {
+			$this->pills_list( $name, $name, $value, $max, $generated, $placeholder, $empty );
+			return;
+		}
+		$languages = Quissly_Languages::languages();
+		$select    = $name . '_language';
+		echo '<div class="q-languages" data-q-languages>';
+		echo '<p class="q-languages__select"><label for="' . esc_attr( $select ) . '">' . esc_html__( 'Language', 'quissly-for-woocommerce' ) . '</label><br />';
+		echo '<select id="' . esc_attr( $select ) . '" data-q-language-select>';
+		foreach ( $languages as $language ) {
+			/* translators: %s: a language's name. */
+			$label = $language['main'] ? sprintf( __( '%s (default)', 'quissly-for-woocommerce' ), $language['name'] ) : $language['name'];
+			echo '<option value="' . esc_attr( $language['key'] ) . '">' . esc_html( $label ) . '</option>';
+		}
+		echo '</select></p>';
+		echo '<p class="description">' . esc_html__( 'Shoppers see the list for the language they browse your store in. A language with no list of its own shows none.', 'quissly-for-woocommerce' ) . '</p>';
+		foreach ( $languages as $index => $language ) {
+			$key = $language['key'];
+			echo '<div data-q-language="' . esc_attr( $key ) . '"' . ( 0 === $index ? '' : ' hidden' ) . '>';
+			if ( $language['main'] ) {
+				$this->pills_list( $name, $name, $value, $max, $generated, $placeholder, $empty );
+			} else {
+				$this->pills_list( $name_by_language . '[' . $key . ']', $name_by_language . '_' . $key, (string) ( $by_language[ $key ] ?? '' ), $max, (array) ( $generated_by_language[ $key ] ?? array() ), $placeholder, $empty );
+			}
+			echo '</div>';
+		}
+		echo '</div>';
 	}
 
 	/**
@@ -506,14 +563,15 @@ class Quissly_Admin {
 	 * hides and draws as pills, an add row, "N of max" and, with a generated list, "Reset to
 	 * generated". Without the script the textarea stays.
 	 *
-	 * @param string   $name        Field name and id.
+	 * @param string   $name        Field name.
+	 * @param string   $id          Field id.
 	 * @param string   $value       One per line.
 	 * @param int      $max         At most this many.
 	 * @param string[] $generated   The generated list ("Reset to generated"), or none.
 	 * @param string   $placeholder The add box's placeholder.
 	 * @param string   $empty       Shown while the list is empty.
 	 */
-	private function pills_list( $name, $value, $max, array $generated, $placeholder, $empty ) {
+	private function pills_list( $name, $id, $value, $max, array $generated, $placeholder, $empty ) {
 		$config = array(
 			'max'       => (int) $max,
 			'maxLength' => Quissly_Search_Suggestions::MAX_LENGTH,
@@ -533,7 +591,7 @@ class Quissly_Admin {
 				'help'        => sprintf( __( 'Each under %d characters. Click × to remove one.', 'quissly-for-woocommerce' ), Quissly_Search_Suggestions::MAX_LENGTH ),
 			),
 		);
-		echo '<textarea name="' . esc_attr( $name ) . '" id="' . esc_attr( $name ) . '" rows="5" class="large-text" style="max-width:520px" data-q-pills data-config="' . esc_attr( (string) wp_json_encode( $config ) ) . '">' . esc_textarea( $value ) . '</textarea>';
+		echo '<textarea name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" rows="5" class="large-text" style="max-width:520px" data-q-pills data-config="' . esc_attr( (string) wp_json_encode( $config ) ) . '">' . esc_textarea( $value ) . '</textarea>';
 	}
 
 	/**
@@ -734,7 +792,15 @@ class Quissly_Admin {
 		// Search bar suggestions: only when the section was on the form (Quissly readable).
 		if ( isset( $_POST['quissly_suggestions_present'] ) ) {
 			$text  = isset( $_POST['quissly_suggestions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['quissly_suggestions'] ) ) : '';
-			$error = $this->save_search_suggestions( isset( $_POST['quissly_typing_enabled'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['quissly_typing_enabled'] ) ), $text );
+			// A multilingual store's other languages' lists ({key: lines}; absent otherwise).
+			$other = null;
+			if ( isset( $_POST['quissly_suggestions_lang'] ) && is_array( $_POST['quissly_suggestions_lang'] ) ) {
+				$other = array();
+				foreach ( wp_unslash( $_POST['quissly_suggestions_lang'] ) as $language => $lines ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each key and list is sanitized below.
+					$other[ sanitize_key( (string) $language ) ] = sanitize_textarea_field( is_string( $lines ) ? $lines : '' );
+				}
+			}
+			$error = $this->save_search_suggestions( isset( $_POST['quissly_typing_enabled'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['quissly_typing_enabled'] ) ), $text, $other );
 			if ( '' !== $error ) {
 				set_transient( 'quissly_flash_error_' . get_current_user_id(), $error, MINUTE_IN_SECONDS );
 				$status = 'error';
@@ -762,23 +828,40 @@ class Quissly_Admin {
 	 * Write the search bar suggestions to Quissly when they changed. '' when saved (or
 	 * nothing changed), else the reason.
 	 *
-	 * @param bool   $enabled Show typing suggestions.
-	 * @param string $text    One suggestion per line.
+	 * @param bool                      $enabled Show typing suggestions.
+	 * @param string                    $text    One suggestion per line (the main language's).
+	 * @param array<string,string>|null $other   A multilingual store's other languages' lists,
+	 *                                           {key: lines}; null = none on the form.
 	 * @return string
 	 */
-	private function save_search_suggestions( $enabled, $text ) {
+	private function save_search_suggestions( $enabled, $text, $other = null ) {
 		$queries = Quissly_Search_Suggestions::clean( preg_split( '/\r\n|\r|\n/', (string) $text ) );
 		$error   = Quissly_Search_Suggestions::validate( $queries );
 		if ( '' !== $error ) {
 			return $error;
 		}
+		$by_language = null;
+		if ( is_array( $other ) ) {
+			$by_language = array();
+			foreach ( $other as $language => $lines ) {
+				$list  = Quissly_Search_Suggestions::clean( preg_split( '/\r\n|\r|\n/', (string) $lines ) );
+				$error = Quissly_Search_Suggestions::validate( $list );
+				if ( '' !== $error ) {
+					return $error;
+				}
+				if ( '' !== $language && ! empty( $list ) ) {
+					$by_language[ $language ] = $list;
+				}
+			}
+		}
 		$current = Quissly_Search_Suggestions::read();
-		if ( null !== $current && $current['enabled'] === (bool) $enabled && $current['queries'] === $queries ) {
+		if ( null !== $current && $current['enabled'] === (bool) $enabled && $current['queries'] === $queries
+			&& ( null === $by_language || $current['by_language'] === $by_language ) ) {
 			return ''; // unchanged: no write.
 		}
-		// The merchant's own list from now on: Quissly's generator keeps any list that differs
+		// The merchant's own lists from now on: Quissly's generator keeps any list that differs
 		// from what it generated, so nothing is recorded here.
-		return Quissly_Search_Suggestions::save( $enabled, $queries );
+		return Quissly_Search_Suggestions::save( $enabled, $queries, $by_language );
 	}
 
 	/**

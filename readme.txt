@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.4
+Stable tag: 1.0.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,12 @@ The plugin updates itself. Once a day it checks the [plugin's GitHub releases](h
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.5 =
+* New: stores in several languages (WPML or Polylang). Searches on every language's pages show that language's products, Quick and the chat's Add to Cart use them too, and your catalog is sent to Quissly once, in your main language.
+* New: search bar suggestions and your own search examples have a list per language, chosen with a Language select in Configuration. Shoppers see their language's list, never another language's.
+* Changed: page-builder shortcodes are left out of the product descriptions sent to Quissly.
+* Changed: updates are checked for every 30 minutes.
 
 = 1.0.4 =
 * New: updates arrive within minutes of a release instead of up to a day later.

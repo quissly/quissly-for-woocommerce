@@ -127,6 +127,8 @@
 	}
 
 	function post( path, body ) {
+		// The page's language (a multilingual store): the rows come back in it.
+		if ( CFG.lang ) { body.lang = CFG.lang; }
 		return fetch( CFG.restUrl + path, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': CFG.nonce || '' },

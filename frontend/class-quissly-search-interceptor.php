@@ -184,10 +184,10 @@ class Quissly_Search_Interceptor {
 		if ( '' !== $token ) {
 			$ids = Quissly_Proxy::read_ids( $token );
 			if ( ! empty( $ids ) ) {
-				$ids = self::sort_snapshot_ids( array_map( 'intval', $ids ), $this->resolve_orderby() );
+				$ids = self::sort_snapshot_ids( Quissly_Languages::to_current( array_map( 'intval', $ids ) ), $this->resolve_orderby() );
 				$this->apply_ids_to_query( $query, $ids );
 				// Links pre-select the variation the photo/voice matched, as on a text search.
-				$this->top_variants += Quissly_Proxy::read_variants( $token );
+				$this->top_variants += Quissly_Languages::variants_to_current( Quissly_Proxy::read_variants( $token ) );
 				$this->intercepted_query = $query;
 				$this->total             = count( $ids );
 				$this->emit_debug_marker( 1, $ids, 'token' );
@@ -404,7 +404,11 @@ class Quissly_Search_Interceptor {
 			$result = array( 'ids' => array(), 'code' => '' !== $code ? $code : 'error' );
 		} else {
 			$parsed = Quissly_Response_Parser::parse_search( $response );
-			$result = array( 'ids' => $parsed['ids'], 'total' => $parsed['num_total_results'] );
+			// Quissly holds the main language's products: on another language's page, their
+			// translations (a multilingual plugin hides a product of another language).
+			$parsed['ids']      = Quissly_Languages::to_current( $parsed['ids'] );
+			$parsed['variants'] = Quissly_Languages::variants_to_current( $parsed['variants'] );
+			$result             = array( 'ids' => $parsed['ids'], 'total' => $parsed['num_total_results'] );
 			if ( empty( $parsed['ids'] ) ) {
 				$result['code'] = 'no_results';
 			}

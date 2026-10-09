@@ -51,3 +51,8 @@
 .q-suggestions__error { color: #b32d2e; margin: 6px 0 0; }
 .q-suggestions__reset { margin-top: 4px !important; }
 .q-suggestions [hidden] { display: none !important; }
+.q-languages__select { margin: 0 0 4px; }
+.q-languages__select label { font-weight: 600; }
+.q-languages__select select { min-width: 240px; margin-top: 6px; }
+.q-languages > .description { max-width: 520px; margin-bottom: 12px; }
+.q-languages [hidden] { display: none !important; }

@@ -134,8 +134,25 @@
 		render();
 	}
 
+	/**
+	 * A multilingual store's lists ([data-q-languages]): the Language select shows its
+	 * language's list ([data-q-language]) and hides the others - all of them are saved.
+	 */
+	function languages(root) {
+		var select = root.querySelector('[data-q-language-select]');
+		if (!select) {
+			return;
+		}
+		select.addEventListener('change', function () {
+			Array.prototype.forEach.call(root.querySelectorAll('[data-q-language]'), function (list) {
+				list.hidden = list.getAttribute('data-q-language') !== select.value;
+			});
+		});
+	}
+
 	function boot() {
 		Array.prototype.forEach.call(document.querySelectorAll('textarea[data-q-pills]'), init);
+		Array.prototype.forEach.call(document.querySelectorAll('[data-q-languages]'), languages);
 	}
 
 	if (document.readyState === 'loading') {

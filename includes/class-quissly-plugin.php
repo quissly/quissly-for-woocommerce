@@ -85,6 +85,7 @@ final class Quissly_Plugin {
 			'frontend/class-quissly-live-search-client.php',
 			'frontend/class-quissly-mock-search-client.php',
 			'frontend/class-quissly-variant-deeplink.php',
+			'includes/class-quissly-languages.php',
 			'includes/class-quissly-search-signal.php',
 			'includes/class-quissly-search-suggestions.php',
 			'includes/class-quissly-suggestions-enrich.php',

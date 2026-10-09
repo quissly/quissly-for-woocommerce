@@ -175,6 +175,14 @@ class Quissly_Sync_Hooks {
 			$this->enqueue_delete( $product_id );
 			return;
 		}
+		if ( ! Quissly_Languages::keep_for_sync( $product_id ) ) {
+			// A translation: its main-language product stands for it in Quissly. One sent
+			// before (when every language was sent) is taken out.
+			if ( get_post_meta( $product_id, Quissly_Sync_Worker::INGESTED_META, true ) ) {
+				$this->enqueue_delete( $product_id );
+			}
+			return;
+		}
 		// Eligible right now, so this upsert replaces a stale pending delete (trash -> restore
 		// before the queue flushed: WooCommerce restores the product's previous status).
 		( new Quissly_Dirty_Queue() )->enqueue_live( $product_id );

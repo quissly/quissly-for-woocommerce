@@ -22,12 +22,22 @@ if ( ! defined( 'ABSPATH' ) ) {
  *                       sign-in), read, merge OUR two keys, write back (PUT replaces the
  *                       whole blob, so anything else in it is kept).
  *
- * clean(), validate() and from_config() are pure (unit-tested).
+ * A multilingual store (WPML, Polylang - Quissly_Languages) has a list per language, in the
+ * Magento plugin's keys: `client_specific_queries` is the main language's (named in
+ * `client_specific_queries_language`), the others are under `client_specific_queries_by_language`.
+ * A shopper sees their language's list; a language without one shows none rather than another
+ * language's.
+ *
+ * clean(), validate(), from_config(), pick() and pick_generated() are pure (unit-tested).
  */
 class Quissly_Search_Suggestions {
 
 	const QUERIES_KEY = 'client_specific_queries';
 	const TYPING_KEY  = 'search_typing_enabled';
+
+	/** The main list's language ("ka"), and the other languages' lists {"en": [...]}. */
+	const PRIMARY_KEY     = 'client_specific_queries_language';
+	const BY_LANGUAGE_KEY = 'client_specific_queries_by_language';
 
 	/** What Quissly's generator last wrote, {main, by_language} (written by Quissly, read only here). */
 	const GENERATED_KEY = 'client_specific_queries_generated';
@@ -99,26 +109,64 @@ class Quissly_Search_Suggestions {
 	 * The suggestions a widget_config holds (null = no config row: typing on, none). PURE.
 	 *
 	 * @param array|null $config Decoded widget_config.
-	 * @return array{enabled:bool,queries:string[],generated:string[],generated_by_language:array<string,string[]>}
+	 * @return array{enabled:bool,queries:string[],language:string,by_language:array<string,string[]>,generated:string[],generated_by_language:array<string,string[]>}
 	 */
 	public static function from_config( $config ) {
-		$config       = is_array( $config ) ? $config : array();
-		$generated    = isset( $config[ self::GENERATED_KEY ] ) && is_array( $config[ self::GENERATED_KEY ] ) ? $config[ self::GENERATED_KEY ] : array();
-		$per_language = array();
-		foreach ( (array) ( $generated['by_language'] ?? array() ) as $language => $queries ) {
-			$queries = self::clean( $queries );
-			if ( is_string( $language ) && '' !== $language && ! empty( $queries ) ) {
-				$per_language[ strtolower( $language ) ] = $queries;
-			}
-		}
+		$config    = is_array( $config ) ? $config : array();
+		$generated = isset( $config[ self::GENERATED_KEY ] ) && is_array( $config[ self::GENERATED_KEY ] ) ? $config[ self::GENERATED_KEY ] : array();
+		$primary   = $config[ self::PRIMARY_KEY ] ?? '';
 
 		return array(
 			'enabled'               => ! ( array_key_exists( self::TYPING_KEY, $config ) && false === $config[ self::TYPING_KEY ] ),
 			'queries'               => self::clean( $config[ self::QUERIES_KEY ] ?? array() ),
+			'language'              => is_string( $primary ) ? strtolower( trim( $primary ) ) : '',
+			'by_language'           => self::lists_by_language( $config[ self::BY_LANGUAGE_KEY ] ?? array() ),
 			// What Quissly's generator last wrote (its merchant-edit baseline): "Reset to generated".
 			'generated'             => self::clean( $generated['main'] ?? array() ),
-			'generated_by_language' => $per_language,
+			'generated_by_language' => self::lists_by_language( $generated['by_language'] ?? array() ),
 		);
+	}
+
+	/**
+	 * {language: list} cleaned, keys lowercased, empty lists left out. PURE.
+	 *
+	 * @param mixed $raw Map.
+	 * @return array<string,string[]>
+	 */
+	private static function lists_by_language( $raw ) {
+		$out = array();
+		foreach ( (array) $raw as $language => $queries ) {
+			$queries = self::clean( $queries );
+			if ( is_string( $language ) && '' !== $language && ! empty( $queries ) ) {
+				$out[ strtolower( $language ) ] = $queries;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * The typing list for a shopper's language: the main list in the main language (or with
+	 * no language given), else that language's list (or its base language's: "pt-br" ->
+	 * "pt"). Another language without a list gets the main list on a single-language store
+	 * and none on a multilingual one - never text in a language the page is not in. PURE.
+	 *
+	 * @param array  $lists        from_config().
+	 * @param string $language     The shopper's language key.
+	 * @param string $main         The main language's key (when the config does not say).
+	 * @param bool   $multilingual The store has more than one language.
+	 * @return string[]
+	 */
+	public static function pick( array $lists, $language, $main, $multilingual ) {
+		$main     = '' !== ( $lists['language'] ?? '' ) ? $lists['language'] : (string) $main;
+		$language = strtolower( str_replace( '_', '-', trim( (string) $language ) ) );
+		if ( '' === $language || $language === $main ) {
+			return (array) ( $lists['queries'] ?? array() );
+		}
+		$by_language = (array) ( $lists['by_language'] ?? array() );
+		$base        = explode( '-', $language )[0];
+
+		return $by_language[ $language ] ?? $by_language[ $base ] ?? ( $multilingual ? array() : (array) ( $lists['queries'] ?? array() ) );
 	}
 
 	/**
@@ -128,11 +176,15 @@ class Quissly_Search_Suggestions {
 	 * merchant edited the typing list), else the generated main list; none before anything was
 	 * generated. At most MAX_CHIPS. PURE.
 	 *
+	 * On a multilingual store ($main given), a language other than the main one never falls
+	 * back to the main language's list.
+	 *
 	 * @param array  $lists    from_config().
 	 * @param string $language Language key ("en", "pt-br").
+	 * @param string $main     A multilingual store's main language key ('' = one language).
 	 * @return string[]
 	 */
-	public static function pick_generated( array $lists, $language ) {
+	public static function pick_generated( array $lists, $language, $main = '' ) {
 		$by_language = (array) ( $lists['generated_by_language'] ?? array() );
 		$language    = strtolower( str_replace( '_', '-', trim( (string) $language ) ) );
 		foreach ( array( $language, explode( '-', $language )[0] ) as $key ) {
@@ -140,28 +192,34 @@ class Quissly_Search_Suggestions {
 				return array_slice( array_values( $by_language[ $key ] ), 0, self::MAX_CHIPS );
 			}
 		}
+		if ( '' !== $main && '' !== $language && $language !== $main ) {
+			return array();
+		}
 
 		return array_slice( array_values( (array) ( $lists['generated'] ?? array() ) ), 0, self::MAX_CHIPS );
 	}
 
 	/**
-	 * What the storefront overlay types: the list when typing is on, else none.
+	 * What the storefront overlay types: the shopper's language's list (pick()) when typing
+	 * is on, else none.
 	 *
 	 * @return string[]
 	 */
 	public static function for_storefront() {
 		$lists = self::storefront_lists();
 
-		return $lists['enabled'] ? $lists['queries'] : array();
+		return $lists['enabled'] ? self::pick( $lists, Quissly_Languages::current_key(), Quissly_Languages::main_key(), Quissly_Languages::is_multilingual() ) : array();
 	}
 
 	/**
-	 * The overlay's Automatic suggestion buttons, for the site's language (pick_generated()).
+	 * The overlay's Automatic suggestion buttons, for the shopper's language (pick_generated()).
 	 *
 	 * @return string[]
 	 */
 	public static function generated_for_storefront() {
-		return self::pick_generated( self::storefront_lists(), Quissly_Suggestions_Enrich::language_key( get_locale() ) );
+		$main = Quissly_Languages::is_multilingual() ? Quissly_Languages::main_key() : '';
+
+		return self::pick_generated( self::storefront_lists(), Quissly_Languages::current_key(), $main );
 	}
 
 	/**
@@ -173,8 +231,8 @@ class Quissly_Search_Suggestions {
 	 */
 	private static function storefront_lists() {
 		$cached = get_transient( self::CACHE );
-		// A list cached before the generated lists were (a plain string[]) is read again.
-		if ( is_array( $cached ) && isset( $cached['queries'], $cached['generated_by_language'] ) ) {
+		// A list cached before the generated lists or the per-language ones were is read again.
+		if ( is_array( $cached ) && isset( $cached['queries'], $cached['generated_by_language'], $cached['by_language'] ) ) {
 			return $cached;
 		}
 		$read  = self::read( false );
@@ -213,13 +271,15 @@ class Quissly_Search_Suggestions {
 
 	/**
 	 * Write the list to Quissly: sign in as the store, read the whole widget_config, set
-	 * our two keys, write it back. '' on success, else a merchant-facing reason.
+	 * our keys, write it back. '' on success, else a merchant-facing reason.
 	 *
-	 * @param bool     $enabled Show typing suggestions.
-	 * @param string[] $queries Cleaned, validated list.
+	 * @param bool                         $enabled     Show typing suggestions.
+	 * @param string[]                     $queries     Cleaned, validated main list.
+	 * @param array<string,string[]>|null  $by_language A multilingual store's other languages'
+	 *                                                  lists (null = leave them as they are).
 	 * @return string
 	 */
-	public static function save( $enabled, array $queries ) {
+	public static function save( $enabled, array $queries, $by_language = null ) {
 		$service_id = self::service_id();
 		if ( '' === $service_id ) {
 			return __( 'Search isn\'t set up for this store in Quissly yet, so there is nowhere to save search bar suggestions.', 'quissly-for-woocommerce' );
@@ -243,6 +303,11 @@ class Quissly_Search_Suggestions {
 
 		$config[ self::QUERIES_KEY ] = array_values( $queries );
 		$config[ self::TYPING_KEY ]  = (bool) $enabled;
+		if ( is_array( $by_language ) ) {
+			// As an object, also when empty: the Shopify app reads a language map.
+			$config[ self::BY_LANGUAGE_KEY ] = (object) array_map( 'array_values', array_filter( $by_language ) );
+			$config[ self::PRIMARY_KEY ]     = Quissly_Languages::main_key();
+		}
 
 		$written = wp_remote_request(
 			self::write_url( $service_id ),

@@ -76,8 +76,14 @@ class Quissly_Chat_Cart {
 	 */
 	public function handle_resolve() {
 		$raw = isset( $_GET['ids'] ) ? sanitize_text_field( wp_unslash( $_GET['ids'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- public, read-only, like search.
-		$ids = self::valid_ids( explode( ',', $raw ) );
-		wp_send_json( (object) self::resolve( $ids, self::id_map() ) );
+		$ids      = self::valid_ids( explode( ',', $raw ) );
+		$resolved = self::resolve( $ids, self::id_map() );
+		// Quissly's ids are the main language's products: on a multilingual store the
+		// shopper's language's copy goes in the cart.
+		foreach ( $resolved as $uuid => $product_id ) {
+			$resolved[ $uuid ] = Quissly_Languages::translate( $product_id, '', 'product_variation' === get_post_type( $product_id ) ? 'product_variation' : 'product' );
+		}
+		wp_send_json( (object) $resolved );
 	}
 
 	/**

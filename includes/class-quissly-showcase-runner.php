@@ -19,12 +19,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Quissly_Suggestions_Enrich): it writes them, checks each one finds products, and writes them
  * into the QSearch widget_config itself - keeping any list the merchant edited, so nothing here
  * needs to know about the merchant's own list. What this sends is what only WooCommerce knows:
- * the store's language and its catalog (the 60 most recently changed published products).
+ * the store's languages and its catalog in each (the 60 most recently changed published
+ * products; a multilingual store's - WPML, Polylang - in every language it has, so each gets its
+ * own list, the main language's being the main one).
  *
  * When: after the first catalog sync (before it there is nothing to search). Right after the
  * sync the index can still be filling - Quissly answers "insufficient" and this asks again in an
  * hour; after MAX_ATTEMPTS it accepts a shorter list. Done once Quissly answers written or
- * unchanged, until the store's language changes or the generator does (lists from an older one
+ * unchanged, until the store's languages change or the generator does (lists from an older one
  * are made again once). Runs from an hourly Action Scheduler action. On by default; the
  * `quissly_showcase_enabled` filter switches it off.
  */
@@ -94,7 +96,8 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * Something to ask for: never asked, the store's language changed, or an older generator.
+	 * Something to ask for: never asked, the store's languages changed (its main one, or one
+	 * added), or an older generator.
 	 *
 	 * @return bool
 	 */
@@ -103,7 +106,9 @@ class Quissly_Showcase_Runner {
 
 		return empty( $state['generated_at'] )
 			|| Quissly_Suggestions_Enrich::GENERATOR !== ( $state['generator'] ?? '' )
-			|| self::language() !== ( $state['language'] ?? '' );
+			|| self::language() !== ( $state['language'] ?? '' )
+			// A list made before every language was asked for covered the main one alone.
+			|| self::languages() !== ( $state['languages'] ?? array( $state['language'] ?? '' ) );
 	}
 
 	/**
@@ -119,12 +124,21 @@ class Quissly_Showcase_Runner {
 	}
 
 	/**
-	 * The store's language as a widget_config key ("en", "ka", "pt-br").
+	 * The store's (main) language as a widget_config key ("en", "ka", "pt-br").
 	 *
 	 * @return string
 	 */
 	public static function language() {
-		return Quissly_Suggestions_Enrich::language_key( get_locale() );
+		return Quissly_Languages::main_key();
+	}
+
+	/**
+	 * Every language's key, the main one first (one, without a multilingual plugin).
+	 *
+	 * @return string[]
+	 */
+	public static function languages() {
+		return array_values( array_unique( wp_list_pluck( Quissly_Languages::languages(), 'key' ) ) );
 	}
 
 	/**
@@ -170,15 +184,22 @@ class Quissly_Showcase_Runner {
 	private function ask( array $state, $now ) {
 		try {
 			$language   = self::language();
+			$languages  = self::languages();
+			$catalogs   = array();
+			foreach ( Quissly_Languages::languages() as $entry ) {
+				if ( ! isset( $catalogs[ $entry['key'] ] ) ) {
+					$catalogs[ $entry['key'] ] = self::catalog_facts( $entry['code'] );
+				}
+			}
 			$attempts   = (int) ( $state['attempts'] ?? 0 ) + 1;
 			$regenerate = ! empty( $state['generated_at'] ) && Quissly_Suggestions_Enrich::GENERATOR !== ( $state['generator'] ?? '' );
 			$body       = Quissly_Suggestions_Enrich::body(
 				$language,
-				array( $language ),
-				array( $language => self::catalog_facts() ),
+				$languages,
+				$catalogs,
 				array(
 					'main'        => self::generated(),
-					'by_language' => array(),
+					'by_language' => (array) ( $state['generated_by_language'] ?? array() ),
 				),
 				$regenerate ? 'regenerate' : 'fill',
 				$attempts >= Quissly_Suggestions_Enrich::MAX_ATTEMPTS
@@ -205,17 +226,28 @@ class Quissly_Showcase_Runner {
 			if ( empty( $main ) ) {
 				$main = Quissly_Search_Suggestions::clean( $response['body']['languages'][ $language ] ?? array() );
 			}
+			// The other languages' lists (Quissly writes them into the widget_config itself;
+			// kept here as the next call's baseline).
+			$by_language = (array) ( $state['generated_by_language'] ?? array() );
+			foreach ( array_slice( $languages, 1 ) as $other ) {
+				$list = Quissly_Search_Suggestions::clean( $response['body']['languages'][ $other ] ?? array() );
+				if ( ! empty( $list ) ) {
+					$by_language[ $other ] = $list;
+				}
+			}
 			self::update(
 				array(
-					'generated_at' => (int) ( $state['generated_at'] ?? 0 ) ? (int) $state['generated_at'] : $now,
-					'generator'    => Quissly_Suggestions_Enrich::GENERATOR,
-					'language'     => $language,
-					'generated'    => ! empty( $main ) ? $main : ( $state['generated'] ?? array() ),
-					'attempts'     => 0,
-					'next_at'      => 0,
-					'locked_at'    => 0,
-					'last_error'   => '',
-					'last_status'  => $status,
+					'generated_at'          => (int) ( $state['generated_at'] ?? 0 ) ? (int) $state['generated_at'] : $now,
+					'generator'             => Quissly_Suggestions_Enrich::GENERATOR,
+					'language'              => $language,
+					'languages'             => $languages,
+					'generated_by_language' => $by_language,
+					'generated'             => ! empty( $main ) ? $main : ( $state['generated'] ?? array() ),
+					'attempts'              => 0,
+					'next_at'               => 0,
+					'locked_at'             => 0,
+					'last_error'            => '',
+					'last_status'           => $status,
 				)
 			);
 			if ( 'written' === $status ) {
@@ -255,13 +287,25 @@ class Quissly_Showcase_Runner {
 
 	/**
 	 * Catalog facts for Quissly's suggestion generator: the 60 most recently changed published
-	 * products - title, category (the deepest), brand, attributes with their values, price range.
+	 * products - title, category (the deepest), brand, attributes with their values, price range
+	 * - of one language on a multilingual store (as its shoppers read them).
 	 *
+	 * @param string $code A language's plugin code ('' = the store's own products, as before).
 	 * @return array
 	 */
-	public static function catalog_facts() {
+	public static function catalog_facts( $code = '' ) {
 		$products = array();
-		foreach ( wc_get_products( array( 'limit' => Quissly_Suggestions_Enrich::MAX_PRODUCTS, 'status' => 'publish', 'orderby' => 'modified', 'order' => 'DESC' ) ) as $product ) {
+		$args     = array( 'limit' => Quissly_Suggestions_Enrich::MAX_PRODUCTS, 'status' => 'publish', 'orderby' => 'modified', 'order' => 'DESC' );
+		if ( '' !== $code ) {
+			$args['lang'] = $code; // Polylang's query var; WPML follows the switched language.
+		}
+		$found = Quissly_Languages::in_language(
+			$code,
+			static function () use ( $args ) {
+				return wc_get_products( $args );
+			}
+		);
+		foreach ( $found as $product ) {
 			$options = array();
 			foreach ( $product->get_attributes() as $attribute ) {
 				if ( ! is_a( $attribute, 'WC_Product_Attribute' ) ) {

@@ -152,9 +152,31 @@ class Quissly_Product_Mapper {
 		$html = preg_replace( '#<(script|style)\b[^>]*>.*?</\1>#is', '', (string) $html );
 		$text = strip_tags( $html );
 		$text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$text = self::strip_shortcodes( $text );
 		$text = preg_replace( '/\s+/u', ' ', $text );
 
 		return trim( $text );
+	}
+
+	/**
+	 * Remove shortcode tags a page builder leaves in descriptions ("[spb_text_block
+	 * animation="none"]...[/spb_text_block]"), keeping the text they wrap: a tag that is
+	 * closed somewhere ([/name]), and one carrying attributes. A lone "[NEW]" is text and stays.
+	 *
+	 * @param string $text Text.
+	 * @return string
+	 */
+	private static function strip_shortcodes( $text ) {
+		if ( false === strpos( $text, '[' ) ) {
+			return $text;
+		}
+		if ( preg_match_all( '#\[/([A-Za-z][\w-]*)\]#', $text, $closed ) ) {
+			foreach ( array_unique( $closed[1] ) as $name ) {
+				$text = preg_replace( '#\[/?' . preg_quote( $name, '#' ) . '(?:\s[^\]]*)?\]#', ' ', $text );
+			}
+		}
+
+		return preg_replace( '#\[[A-Za-z][\w-]*\s+[\w-]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s\]]+)[^\]]*\]#', ' ', $text );
 	}
 
 	/**

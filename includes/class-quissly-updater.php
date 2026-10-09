@@ -58,8 +58,8 @@ final class Quissly_Updater {
 	 */
 	const HINT_URL = 'https://raw.githubusercontent.com/quissly/quissly-for-woocommerce/main/quissly-for-woocommerce.php';
 
-	/** How often the hint is read: 2 minutes while the update flow is being tested (then 30). */
-	const HINT_EVERY = 120;
+	/** How often the hint is read: every 30 minutes. */
+	const HINT_EVERY = 1800;
 
 	/** The WP-Cron event that reads it. */
 	const HINT_HOOK = 'quissly_update_hint';
@@ -72,7 +72,7 @@ final class Quissly_Updater {
 		add_filter( 'auto_update_plugin', array( __CLASS__, 'auto_update' ), 10, 2 );
 		add_filter( 'plugins_api', array( __CLASS__, 'details' ), 10, 3 );
 		add_filter( 'upgrader_pre_download', array( __CLASS__, 'download' ), 10, 3 );
-		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- HINT_EVERY, 2 minutes while testing.
+		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- HINT_EVERY, 30 minutes.
 		add_action( self::HINT_HOOK, array( __CLASS__, 'hint' ) );
 		add_action( 'init', array( __CLASS__, 'schedule_hint' ) );
 	}
