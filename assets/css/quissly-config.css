@@ -48,3 +48,11 @@
 .quissly-config .select2-container .select2-selection--single .select2-selection__arrow { height: 34px; }
 .quissly-config .select2-container--focus .select2-selection--single,
 .quissly-config .select2-container--open .select2-selection--single { border-color: #2271b1; box-shadow: 0 0 0 1px #2271b1; }
+
+/* Search Suggestions, Automatic: the buttons the shop shows now, read-only, as they look there. */
+.q-auto-buttons { margin-top: 14px; max-width: 640px; }
+.q-auto-buttons[hidden] { display: none !important; }
+.q-auto-buttons__title { font-weight: 600; margin: 0 0 8px; }
+.q-auto-buttons__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+.q-auto-buttons__language { min-width: 90px; color: #646970; font-size: 13px; }
+.q-auto-buttons__button { padding: 4px 12px; border: 1px solid #c3c4c7; border-radius: 999px; background: #fff; color: #1d2327; font-size: 13px; line-height: 1.5; }

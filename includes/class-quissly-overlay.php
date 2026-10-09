@@ -122,21 +122,8 @@ class Quissly_Overlay {
 		if ( ! Quissly_Settings::get( 'quissly_overlay_suggestions' ) ) {
 			return array();
 		}
-		if ( 'manual' === Quissly_Settings::get( 'quissly_overlay_suggestions_mode' ) ) {
-			$text = (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' );
-			// A multilingual store: the shopper's language's list; a language without one uses
-			// the main language's (the Shopify app's rule).
-			$current = Quissly_Languages::current_key();
-			if ( Quissly_Languages::is_multilingual() && $current !== Quissly_Languages::main_key() ) {
-				$by   = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
-				$text = (string) ( $by[ $current ] ?? $by[ explode( '-', $current )[0] ] ?? $text );
-			}
-			$lines = preg_split( '/\R/u', $text );
-
-			return array_slice( Quissly_Search_Suggestions::clean( $lines ? $lines : array() ), 0, Quissly_Search_Suggestions::MAX_CHIPS );
-		}
-
-		return Quissly_Search_Suggestions::generated_for_storefront();
+		// Manual or generated, as Quissly holds the choice (the Shopify app's keys).
+		return Quissly_Search_Suggestions::buttons_for_storefront();
 	}
 
 	/**

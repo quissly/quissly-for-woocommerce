@@ -158,6 +158,8 @@ class Quissly_Showcase_Runner {
 		if ( ! Quissly_Sync_State::is_initial_sync_complete() || '' === Quissly_Env::token() ) {
 			return 'not_ready';
 		}
+		// The storefront reads the lists Quissly writes with the stored service id: have it.
+		Quissly_Search_Suggestions::lookup_service_id();
 		$state = self::state();
 		if ( (int) ( $state['next_at'] ?? 0 ) > $now ) {
 			return 'not_due';

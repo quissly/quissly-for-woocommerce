@@ -31,6 +31,14 @@ class Quissly_Admin {
 	const LOG_LINES = 200;
 
 	/**
+	 * What Quissly holds for the store's search, read once per page (remote_lists()); false =
+	 * not read yet.
+	 *
+	 * @var array|null|false
+	 */
+	private $remote_lists = false;
+
+	/**
 	 * Wire admin hooks.
 	 */
 	public function register() {
@@ -462,6 +470,20 @@ class Quissly_Admin {
 	}
 
 	/**
+	 * What Quissly holds for the store's search (Quissly_Search_Suggestions::read()), read once
+	 * per page: both suggestion sections show it.
+	 *
+	 * @return array|null
+	 */
+	private function remote_lists() {
+		if ( false === $this->remote_lists ) {
+			$this->remote_lists = Quissly_Search_Suggestions::read();
+		}
+
+		return $this->remote_lists;
+	}
+
+	/**
 	 * Configuration's "Search Examples" section (the Shopify app's): the queries the
 	 * search overlay types into its empty bar. They live in Quissly
 	 * (Quissly_Search_Suggestions), so the section shows what Quissly holds now and the save
@@ -469,7 +491,7 @@ class Quissly_Admin {
 	 */
 	private function render_search_suggestions() {
 		echo '<tr><td colspan="2" style="padding-left:0"><p class="description" style="max-width:760px;margin:0">' . esc_html__( 'Example searches the search overlay types, letter by letter, into its empty search bar, in random order, so shoppers see what they can ask. They stop the moment a shopper starts typing.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
-		$current = Quissly_Search_Suggestions::read();
+		$current = $this->remote_lists();
 		if ( null === $current ) {
 			echo '<tr><td colspan="2" style="padding-left:0"><p><em>' . esc_html__( 'Available once the store is connected and its first catalog sync has created search in Quissly - or Quissly could not be reached just now; reload to try again.', 'quissly-for-woocommerce' ) . '</em></p></td></tr>';
 			return;
@@ -515,7 +537,20 @@ class Quissly_Admin {
 
 		// Which ones: the Shopify app's "Suggestions" select (Automatic / Manual), its note saying
 		// what the choice means; Manual's lists show under it only for Manual (quissly-config.js).
-		$mode  = Quissly_Settings::get( 'quissly_overlay_suggestions_mode' );
+		// Kept in Quissly (the Shopify app's keys); a store whose choice is not there yet shows the
+		// plugin's copy, which the next save moves to Quissly.
+		$remote = $this->remote_lists();
+		$main   = Quissly_Languages::main_key();
+		if ( null !== $remote && '' !== $remote['chips_mode'] ) {
+			$mode   = $remote['chips_mode'];
+			$manual = $remote['manual_chips'];
+		} else {
+			$mode   = Quissly_Settings::get( 'quissly_overlay_suggestions_mode' );
+			$manual = Quissly_Search_Suggestions::plugin_manual_lists();
+		}
+		if ( null !== $remote ) {
+			echo '<tr hidden><td colspan="2"><input type="hidden" name="quissly_buttons_present" value="1" /></td></tr>';
+		}
 		$notes = array(
 			'automatic' => __( 'Quissly picks them from your catalog, per language.', 'quissly-for-woocommerce' ),
 			'manual'    => __( 'You type them, per store language.', 'quissly-for-woocommerce' ),
@@ -527,14 +562,24 @@ class Quissly_Admin {
 		}
 		echo '</select>';
 		echo '<p class="description" id="quissly_overlay_suggestions_mode_note" data-automatic="' . esc_attr( $notes['automatic'] ) . '" data-manual="' . esc_attr( $notes['manual'] ) . '">' . esc_html( $notes[ 'manual' === $mode ? 'manual' : 'automatic' ] ) . '</p>';
+		// What Automatic shows right now (read-only, shown only for Automatic): the buttons are
+		// Quissly's, so without this the section looks empty while the shop has them.
+		echo '<div id="quissly_overlay_suggestions_auto" class="q-auto-buttons"' . ( 'manual' === $mode ? ' hidden' : '' ) . '>';
+		$this->render_generated_buttons( $remote );
+		echo '</div>';
 		// Manual's own lists, under the select they belong to (shown only for Manual).
 		echo '<div id="quissly_overlay_suggestions_manual_row" class="q-manual-examples"' . ( 'manual' === $mode ? '' : ' hidden' ) . '>';
-		$manual_by_language = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
+		$others = array();
+		foreach ( $manual as $language => $list ) {
+			if ( $language !== $main ) {
+				$others[ $language ] = implode( "\n", $list );
+			}
+		}
 		$this->language_lists(
 			'quissly_overlay_suggestions_manual',
-			(string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ),
+			implode( "\n", (array) ( $manual[ $main ] ?? array() ) ),
 			'quissly_overlay_suggestions_manual_by_language',
-			$manual_by_language,
+			$others,
 			array(),
 			array(),
 			Quissly_Search_Suggestions::MAX_CHIPS,
@@ -543,6 +588,43 @@ class Quissly_Admin {
 			'fields'
 		);
 		echo '</div></td></tr>';
+	}
+
+	/**
+	 * The buttons Automatic shows on the shop, read-only: Quissly's generated list for each
+	 * language (the main one first), or why there are none yet.
+	 *
+	 * @param array|null $remote What Quissly holds (remote_lists()), null when unreadable.
+	 */
+	private function render_generated_buttons( $remote ) {
+		if ( null === $remote ) {
+			echo '<p class="description">' . esc_html__( 'Shown here once the store is connected to Quissly and its first catalog sync has finished.', 'quissly-for-woocommerce' ) . '</p>';
+			return;
+		}
+		$main      = Quissly_Languages::main_key();
+		$languages = Quissly_Languages::languages();
+		$rows      = array();
+		foreach ( $languages as $language ) {
+			$list = Quissly_Search_Suggestions::pick_generated( $remote, $language['key'], $main );
+			if ( ! empty( $list ) ) {
+				$rows[] = array( count( $languages ) > 1 ? $language['name'] : '', $list );
+			}
+		}
+		if ( empty( $rows ) ) {
+			echo '<p class="description">' . esc_html__( 'None yet - Quissly creates them from your catalog after the first catalog sync.', 'quissly-for-woocommerce' ) . '</p>';
+			return;
+		}
+		echo '<p class="q-auto-buttons__title">' . esc_html__( 'Your shop shows now:', 'quissly-for-woocommerce' ) . '</p>';
+		foreach ( $rows as $row ) {
+			echo '<div class="q-auto-buttons__row">';
+			if ( '' !== $row[0] ) {
+				echo '<span class="q-auto-buttons__language">' . esc_html( $row[0] ) . '</span>';
+			}
+			foreach ( $row[1] as $text ) {
+				echo '<span class="q-auto-buttons__button">' . esc_html( $text ) . '</span>';
+			}
+			echo '</div>';
+		}
 	}
 
 	/**
@@ -843,6 +925,20 @@ class Quissly_Admin {
 			}
 		}
 
+		// Search Suggestions' choice and Manual lists, to Quissly: only when it was readable for the
+		// form (the plugin's own copy was saved above with the other settings).
+		if ( isset( $_POST['quissly_buttons_present'] ) ) {
+			$lists = array( Quissly_Languages::main_key() => Quissly_Settings::sanitize_lines( isset( $_POST['quissly_overlay_suggestions_manual'] ) ? wp_unslash( $_POST['quissly_overlay_suggestions_manual'] ) : '' ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_lines() sanitizes.
+			if ( isset( $_POST['quissly_overlay_suggestions_manual_by_language'] ) ) {
+				$lists += Quissly_Settings::sanitize_lines_by_language( wp_unslash( $_POST['quissly_overlay_suggestions_manual_by_language'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_lines_by_language() sanitizes.
+			}
+			$error = $this->save_buttons( isset( $_POST['quissly_overlay_suggestions_mode'] ) ? sanitize_key( wp_unslash( $_POST['quissly_overlay_suggestions_mode'] ) ) : 'automatic', $lists );
+			if ( '' !== $error ) {
+				set_transient( 'quissly_flash_error_' . get_current_user_id(), $error, MINUTE_IN_SECONDS );
+				$status = 'error';
+			}
+		}
+
 		// Catalog data: only when the form listed attributes (the WC Integrations tab doesn't).
 		if ( isset( $_POST['quissly_catalog_offered'] ) ) {
 			$offered = array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['quissly_catalog_offered'] ) );
@@ -898,6 +994,31 @@ class Quissly_Admin {
 		// The merchant's own lists from now on: Quissly's generator keeps any list that differs
 		// from what it generated, so nothing is recorded here.
 		return Quissly_Search_Suggestions::save( $enabled, $queries, $by_language );
+	}
+
+	/**
+	 * Write Search Suggestions' choice and Manual lists to Quissly when they changed. '' when
+	 * saved (or nothing changed), else the reason.
+	 *
+	 * @param string               $mode  automatic | manual.
+	 * @param array<string,string> $lines Manual lists by language key, one per line.
+	 * @return string
+	 */
+	private function save_buttons( $mode, array $lines ) {
+		$mode  = 'manual' === $mode ? 'manual' : 'automatic';
+		$lists = array();
+		foreach ( $lines as $language => $text ) {
+			$list = Quissly_Search_Suggestions::clean( preg_split( '/\R/u', (string) $text ) ?: array() );
+			if ( '' !== (string) $language && ! empty( $list ) ) {
+				$lists[ (string) $language ] = $list;
+			}
+		}
+		$current = Quissly_Search_Suggestions::read();
+		if ( null !== $current && $current['chips_mode'] === $mode && $current['manual_chips'] == $lists ) { // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- the same lists in any language order.
+			return ''; // unchanged: no write.
+		}
+
+		return Quissly_Search_Suggestions::save_buttons( $mode, $lists );
 	}
 
 	/**

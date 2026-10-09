@@ -239,10 +239,14 @@
 	 */
 	function mode(select) {
 		var manual = document.getElementById('quissly_overlay_suggestions_manual_row');
+		var automatic = document.getElementById('quissly_overlay_suggestions_auto');
 		var note = document.getElementById('quissly_overlay_suggestions_mode_note');
 		function sync() {
 			if (manual) {
 				manual.hidden = select.value !== 'manual';
+			}
+			if (automatic) {
+				automatic.hidden = select.value === 'manual';
 			}
 			if (note) {
 				note.textContent = note.getAttribute('data-' + select.value) || '';

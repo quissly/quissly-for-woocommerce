@@ -157,6 +157,8 @@ final class Quissly_Plugin {
 		( new Quissly_Sync_Hooks( $worker ) )->register();
 		// Search bar suggestions generated from the catalog (background, once per store).
 		( new Quissly_Showcase_Runner() )->register();
+		// The search service's id, looked up in the background once the store is connected.
+		Quissly_Search_Suggestions::register();
 
 		// Dev/offline: route catalog batches to the recording mock (NO live call), matching
 		// the search/quick seams. Live scripts/tests remove this filter to exercise the real

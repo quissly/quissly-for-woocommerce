@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.7
+Stable tag: 1.0.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ You can change how often it checks under Quissly > Configuration > Advanced > Up
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.8 =
+* Changed: with Search Suggestions on Automatic, Configuration shows the buttons your shop shows now (per language on a multilingual store).
+* Changed: your Search Suggestions choice and Manual buttons are kept in your Quissly account, next to your Search Examples. Buttons you typed in an earlier version keep showing and move to Quissly the next time you save Configuration.
+* Fixed: Search Examples and Automatic Search Suggestions could stay hidden on the shop until someone opened Quissly > Configuration once after connecting.
 
 = 1.0.7 =
 * Changed: Configuration has a section each for "Search Examples" (the example searches typed into the search bar) and "Search Suggestions" (the buttons under it), named as in Quissly's other apps.

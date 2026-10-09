@@ -39,6 +39,18 @@ class Quissly_Search_Suggestions {
 	const PRIMARY_KEY     = 'client_specific_queries_language';
 	const BY_LANGUAGE_KEY = 'client_specific_queries_by_language';
 
+	/**
+	 * The Search Suggestions buttons, in the Shopify app's keys: which ones ("manual", else the
+	 * generated ones) and the merchant's Manual lists per language, the main one included -
+	 * {"ka": [...], "en": [...]}. Kept in Quissly, so Quissly sees them too.
+	 */
+	const CHIPS_MODE_KEY   = 'search_chips_mode';
+	const MANUAL_CHIPS_KEY = 'search_chips_manual';
+
+	/** The background lookup of the service id (lookup_service_id()), at most once an hour. */
+	const LOOKUP_HOOK = 'quissly_lookup_search_service';
+	const LOOKUP_WAIT = 'quissly_search_service_lookup_wait';
+
 	/** What Quissly's generator last wrote, {main, by_language} (written by Quissly, read only here). */
 	const GENERATED_KEY = 'client_specific_queries_generated';
 
@@ -121,6 +133,9 @@ class Quissly_Search_Suggestions {
 			'queries'               => self::clean( $config[ self::QUERIES_KEY ] ?? array() ),
 			'language'              => is_string( $primary ) ? strtolower( trim( $primary ) ) : '',
 			'by_language'           => self::lists_by_language( $config[ self::BY_LANGUAGE_KEY ] ?? array() ),
+			// '' = not in Quissly yet (a store whose buttons were kept in the plugin before).
+			'chips_mode'            => in_array( $config[ self::CHIPS_MODE_KEY ] ?? '', array( 'automatic', 'manual' ), true ) ? $config[ self::CHIPS_MODE_KEY ] : '',
+			'manual_chips'          => self::lists_by_language( $config[ self::MANUAL_CHIPS_KEY ] ?? array() ),
 			// What Quissly's generator last wrote (its merchant-edit baseline): "Reset to generated".
 			'generated'             => self::clean( $generated['main'] ?? array() ),
 			'generated_by_language' => self::lists_by_language( $generated['by_language'] ?? array() ),
@@ -196,6 +211,71 @@ class Quissly_Search_Suggestions {
 	}
 
 	/**
+	 * The Manual buttons for a shopper's language: that language's list, its base language's,
+	 * else the main language's (the Shopify app's manualChipsForLocale()). At most MAX_CHIPS.
+	 * PURE.
+	 *
+	 * @param array  $lists    from_config().
+	 * @param string $language The shopper's language key.
+	 * @param string $main     The main language's key.
+	 * @return string[]
+	 */
+	public static function pick_manual( array $lists, $language, $main ) {
+		$manual   = (array) ( $lists['manual_chips'] ?? array() );
+		$language = strtolower( str_replace( '_', '-', trim( (string) $language ) ) );
+		foreach ( array( $language, explode( '-', $language )[0], strtolower( (string) $main ) ) as $key ) {
+			if ( '' !== $key && ! empty( $manual[ $key ] ) ) {
+				return array_slice( array_values( $manual[ $key ] ), 0, self::MAX_CHIPS );
+			}
+		}
+
+		return array();
+	}
+
+	/**
+	 * The Search Suggestions buttons for the shopper's language: the Manual list or the
+	 * generated one, as Quissly holds the choice. A store whose choice is not in Quissly yet
+	 * (kept in the plugin before 1.0.8, until the next save in Configuration) still uses the
+	 * plugin's copy, so nothing is lost on the way.
+	 *
+	 * @return string[]
+	 */
+	public static function buttons_for_storefront() {
+		$lists = self::storefront_lists();
+		$main  = Quissly_Languages::main_key();
+		if ( '' === $lists['chips_mode'] ) {
+			$lists['chips_mode']   = 'manual' === Quissly_Settings::get( 'quissly_overlay_suggestions_mode' ) ? 'manual' : 'automatic';
+			$lists['manual_chips'] = self::plugin_manual_lists();
+		}
+		if ( 'manual' === $lists['chips_mode'] ) {
+			return self::pick_manual( $lists, Quissly_Languages::current_key(), $main );
+		}
+
+		return self::pick_generated( $lists, Quissly_Languages::current_key(), $main );
+	}
+
+	/**
+	 * The Manual lists the plugin kept before they moved to Quissly, as {language key: list}.
+	 *
+	 * @return array<string,string[]>
+	 */
+	public static function plugin_manual_lists() {
+		$lists = array( Quissly_Languages::main_key() => (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ) );
+		foreach ( (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' ) as $language => $lines ) {
+			$lists[ (string) $language ] = (string) $lines;
+		}
+		$out = array();
+		foreach ( $lists as $language => $lines ) {
+			$list = array_slice( self::clean( preg_split( '/\R/u', $lines ) ?: array() ), 0, self::MAX_CHIPS );
+			if ( ! empty( $list ) ) {
+				$out[ $language ] = $list;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
 	 * What the storefront overlay types: the shopper's language's list (pick()) when typing
 	 * is on, else none.
 	 *
@@ -225,8 +305,8 @@ class Quissly_Search_Suggestions {
 	 */
 	private static function storefront_lists() {
 		$cached = get_transient( self::CACHE );
-		// A list cached before the generated lists or the per-language ones were is read again.
-		if ( is_array( $cached ) && isset( $cached['queries'], $cached['generated_by_language'], $cached['by_language'] ) ) {
+		// A list cached before the generated, per-language or button lists were is read again.
+		if ( is_array( $cached ) && isset( $cached['queries'], $cached['generated_by_language'], $cached['by_language'], $cached['manual_chips'] ) ) {
 			return $cached;
 		}
 		$read  = self::read( false );
@@ -274,6 +354,47 @@ class Quissly_Search_Suggestions {
 	 * @return string
 	 */
 	public static function save( $enabled, array $queries, $by_language = null ) {
+		return self::write(
+			static function ( array $config ) use ( $enabled, $queries, $by_language ) {
+				$config[ self::QUERIES_KEY ] = array_values( $queries );
+				$config[ self::TYPING_KEY ]  = (bool) $enabled;
+				if ( is_array( $by_language ) ) {
+					// As an object, also when empty: the Shopify app reads a language map.
+					$config[ self::BY_LANGUAGE_KEY ] = (object) array_map( 'array_values', array_filter( $by_language ) );
+					$config[ self::PRIMARY_KEY ]     = Quissly_Languages::main_key();
+				}
+				return $config;
+			}
+		);
+	}
+
+	/**
+	 * Write the Search Suggestions buttons to Quissly (the Shopify app's saveSearchChips()): the
+	 * choice and every language's Manual list, replaced whole; an empty list is left out, so
+	 * that language uses the main one. '' on success, else a merchant-facing reason.
+	 *
+	 * @param string                 $mode  automatic | manual.
+	 * @param array<string,string[]> $lists Cleaned Manual lists by language key, the main one included.
+	 * @return string
+	 */
+	public static function save_buttons( $mode, array $lists ) {
+		return self::write(
+			static function ( array $config ) use ( $mode, $lists ) {
+				$config[ self::CHIPS_MODE_KEY ]   = 'manual' === $mode ? 'manual' : 'automatic';
+				$config[ self::MANUAL_CHIPS_KEY ] = (object) array_map( 'array_values', array_filter( $lists ) );
+				return $config;
+			}
+		);
+	}
+
+	/**
+	 * Sign in as the store, read the whole widget_config, change it, write it back (PUT replaces
+	 * the whole blob, so every other key is kept). '' on success, else a merchant-facing reason.
+	 *
+	 * @param callable $change fn(array $config): array.
+	 * @return string
+	 */
+	private static function write( callable $change ) {
 		$service_id = self::service_id();
 		if ( '' === $service_id ) {
 			return __( 'Search isn\'t set up for this store in Quissly yet, so there is nowhere to save search bar suggestions.', 'quissly-for-woocommerce' );
@@ -293,15 +414,7 @@ class Quissly_Search_Suggestions {
 			return __( 'Couldn\'t save the search bar suggestions. Please try again.', 'quissly-for-woocommerce' );
 		}
 		$config = 200 === $code ? json_decode( wp_remote_retrieve_body( $current ), true ) : array();
-		$config = is_array( $config ) ? $config : array();
-
-		$config[ self::QUERIES_KEY ] = array_values( $queries );
-		$config[ self::TYPING_KEY ]  = (bool) $enabled;
-		if ( is_array( $by_language ) ) {
-			// As an object, also when empty: the Shopify app reads a language map.
-			$config[ self::BY_LANGUAGE_KEY ] = (object) array_map( 'array_values', array_filter( $by_language ) );
-			$config[ self::PRIMARY_KEY ]     = Quissly_Languages::main_key();
-		}
+		$config = $change( is_array( $config ) ? $config : array() );
 
 		$written = wp_remote_request(
 			self::write_url( $service_id ),
@@ -318,6 +431,44 @@ class Quissly_Search_Suggestions {
 		delete_transient( self::CACHE );
 
 		return '';
+	}
+
+	/**
+	 * Hook the background lookup of the service id: the storefront reads Quissly's lists with
+	 * the stored id only (a shopper's page never waits on a lookup), so the id is found in the
+	 * background as soon as the store is connected - not only when Configuration is opened.
+	 */
+	public static function register() {
+		add_action( self::LOOKUP_HOOK, array( __CLASS__, 'lookup_service_id' ) );
+		add_action( 'admin_init', array( __CLASS__, 'maybe_schedule_lookup' ) );
+	}
+
+	/**
+	 * `admin_init`: a connected store without a stored service id gets one looked up in the
+	 * background (Action Scheduler), at most once an hour.
+	 */
+	public static function maybe_schedule_lookup() {
+		if ( '' !== (string) get_option( self::OPTION_SERVICE_ID, '' ) || '' === Quissly_Env::token() || get_transient( self::LOOKUP_WAIT ) ) {
+			return;
+		}
+		set_transient( self::LOOKUP_WAIT, 1, HOUR_IN_SECONDS );
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( self::LOOKUP_HOOK, array(), 'quissly' );
+		}
+	}
+
+	/**
+	 * Look the service id up and store it; the storefront's lists are read again with it.
+	 *
+	 * @return string The id, '' when it could not be found.
+	 */
+	public static function lookup_service_id() {
+		$found = self::service_id();
+		if ( '' !== $found ) {
+			delete_transient( self::CACHE );
+		}
+
+		return $found;
 	}
 
 	/**
