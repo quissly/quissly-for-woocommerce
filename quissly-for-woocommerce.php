@@ -1,10 +1,9 @@
 <?php
-// #anita checking for updates,pls work
 /**
  * Plugin Name:       Quissly for WooCommerce
  * Plugin URI:        https://quissly.com/woocommerce
  * Description:        Replace native WooCommerce search with Quissly AI product discovery: semantic search, voice & image search, autocomplete, and the QChat assistant.
- * Version:           1.0.3
+ * Version:           1.0.4
  * Author:            Quissly
  * Author URI:        https://quissly.com
  * Requires at least: 6.5
@@ -23,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'QUISSLY_VERSION', '1.0.3' );
+define( 'QUISSLY_VERSION', '1.0.4' );
 define( 'QUISSLY_PLUGIN_FILE', __FILE__ );
 define( 'QUISSLY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'QUISSLY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -81,6 +80,8 @@ add_action( 'plugins_loaded', 'quissly_after_update', 5 );
 // WooCommerce is off still receives them.
 require_once QUISSLY_PLUGIN_DIR . 'includes/class-quissly-updater.php';
 Quissly_Updater::register();
+// The update hint's WP-Cron event goes with the plugin.
+register_deactivation_hook( __FILE__, array( 'Quissly_Updater', 'unschedule_hint' ) );
 
 /**
  * Bootstrap the plugin once all plugins are loaded.

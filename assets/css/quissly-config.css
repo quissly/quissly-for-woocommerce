@@ -1,0 +1,53 @@
+/**
+ * Configuration's suggestion lists (assets/js/quissly-config.js): removable pills in Quissly's
+ * indigo and the add row - the Magento plugin's config-suggestions.css.
+ */
+.q-suggestions { max-width: 520px; }
+.q-suggestions .q-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	min-height: 38px;
+	padding: 10px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	background: #fff;
+}
+.q-suggestions .q-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	padding: 4px 4px 4px 12px;
+	border-radius: 999px;
+	background: #f1f1fa;
+	border: 1px solid #d4d4ef;
+	color: #3d3d9b;
+	font-size: 13px;
+	line-height: 1.4;
+}
+.q-suggestions .q-pill__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-suggestions .q-pill__remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: #3d3d9b;
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+.q-suggestions .q-pill__remove:hover,
+.q-suggestions .q-pill__remove:focus { background: #d4d4ef; color: #1d2327; }
+.q-suggestions .q-pills__empty { color: #646970; font-size: 13px; align-self: center; }
+.q-suggestions__add { display: flex; gap: 8px; margin-top: 10px; }
+.q-suggestions__add input { flex: 1; width: auto; }
+.q-suggestions__count.is-over { color: #b32d2e; }
+.q-suggestions__error { color: #b32d2e; margin: 6px 0 0; }
+.q-suggestions__reset { margin-top: 4px !important; }
+.q-suggestions [hidden] { display: none !important; }

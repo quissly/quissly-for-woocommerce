@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,12 @@ The plugin updates itself. Once a day it checks the [plugin's GitHub releases](h
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.4 =
+* New: updates arrive within minutes of a release instead of up to a day later.
+* Changed: Configuration is laid out in sections - Features, Search bar suggestions, Catalog data and Advanced - each opening and closing on a click, with a description under every setting.
+* Changed: search bar suggestions and your own search examples are edited as a list of tags: type one and press Add, click × to remove it, and "Reset to generated" brings back the list Quissly made from your catalog.
+* Changed: "Search suggestions" is now called "Search Examples".
 
 = 1.0.3 =
 * New: suggestions under the search bar. When the search overlay opens, the shopper sees your store's suggestions as buttons; one click searches. Automatic (Quissly picks them from your catalog) or Manual (you type up to 10).

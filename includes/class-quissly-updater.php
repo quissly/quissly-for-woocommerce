@@ -2,7 +2,10 @@
 /**
  * Automatic updates from the plugin's public GitHub repository.
  *
- * Once a day the plugin asks GitHub for the repository's latest release. A newer version is
+ * Once a day the plugin asks GitHub for the repository's latest release - and every HINT_EVERY
+ * it reads just the version line of the repository's main file (raw.githubusercontent.com,
+ * GitHub's CDN: no API rate limit), so a new release is noticed within minutes instead of a day
+ * (hint()). A newer version is
  * handed to WordPress's own update system (the `Update URI` header in the main plugin file
  * routes this plugin's update check to the `update_plugins_github.com` filter instead of
  * WordPress.org), and auto-updates are always on for this plugin - so WordPress downloads,
@@ -50,6 +53,18 @@ final class Quissly_Updater {
 	const SLUG = 'quissly-for-woocommerce';
 
 	/**
+	 * The repository's main file on GitHub's CDN: its `Version:` line is the latest version
+	 * pushed. Only a hint - what is installed still comes from the signed release.
+	 */
+	const HINT_URL = 'https://raw.githubusercontent.com/quissly/quissly-for-woocommerce/main/quissly-for-woocommerce.php';
+
+	/** How often the hint is read: 2 minutes while the update flow is being tested (then 30). */
+	const HINT_EVERY = 120;
+
+	/** The WP-Cron event that reads it. */
+	const HINT_HOOK = 'quissly_update_hint';
+
+	/**
 	 * Hook into WordPress's updater.
 	 */
 	public static function register() {
@@ -57,6 +72,126 @@ final class Quissly_Updater {
 		add_filter( 'auto_update_plugin', array( __CLASS__, 'auto_update' ), 10, 2 );
 		add_filter( 'plugins_api', array( __CLASS__, 'details' ), 10, 3 );
 		add_filter( 'upgrader_pre_download', array( __CLASS__, 'download' ), 10, 3 );
+		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- HINT_EVERY, 2 minutes while testing.
+		add_action( self::HINT_HOOK, array( __CLASS__, 'hint' ) );
+		add_action( 'init', array( __CLASS__, 'schedule_hint' ) );
+	}
+
+	/**
+	 * `cron_schedules`: the hint's interval.
+	 *
+	 * @param array $schedules WordPress's schedules.
+	 * @return array
+	 */
+	public static function cron_schedules( $schedules ) {
+		$schedules[ self::HINT_HOOK ] = array(
+			'interval' => self::HINT_EVERY,
+			'display'  => 'Quissly update hint',
+		);
+
+		return $schedules;
+	}
+
+	/**
+	 * Keep the hint scheduled (WP-Cron; a store without visitors runs it on its next visit).
+	 */
+	public static function schedule_hint() {
+		if ( ! wp_next_scheduled( self::HINT_HOOK ) ) {
+			wp_schedule_event( time() + self::HINT_EVERY, self::HINT_HOOK, self::HINT_HOOK );
+		}
+	}
+
+	/**
+	 * Stop reading the hint (deactivation, uninstall).
+	 */
+	public static function unschedule_hint() {
+		wp_clear_scheduled_hook( self::HINT_HOOK );
+	}
+
+	/**
+	 * The WP-Cron event: when GitHub's main file names a version newer than this one (and newer
+	 * than the release already known), ask GitHub for the release now instead of at the day's
+	 * end, refresh WordPress's update data, and run WordPress's background installer - the same
+	 * signed path a daily check takes, minutes after the release instead of up to a day and a
+	 * half. A version pushed but not released yet (the workflow takes a minute or two) is asked
+	 * for again on the next tick; nothing is kept for a day.
+	 *
+	 * @return string What happened.
+	 */
+	public static function hint() {
+		if ( self::is_checkout() ) {
+			return 'git_checkout';
+		}
+		$hinted = self::hinted_version();
+		if ( null === $hinted ) {
+			return 'no_hint';
+		}
+		$cached = get_site_transient( self::CACHE );
+		$known  = is_array( $cached ) && is_array( $cached['release'] ?? null ) ? (string) $cached['release']['version'] : '';
+		if ( ! self::is_news( $hinted, QUISSLY_VERSION, $known ) ) {
+			return 'nothing_new';
+		}
+		delete_site_transient( self::CACHE );
+		$release = self::latest();
+		if ( null === $release || version_compare( $release['version'], $hinted, '<' ) ) {
+			delete_site_transient( self::CACHE );
+			return 'release_not_ready';
+		}
+		// WordPress's own update data, then its background installer: the normal path, now.
+		delete_site_transient( 'update_plugins' );
+		wp_update_plugins();
+		if ( function_exists( 'wp_maybe_auto_update' ) ) {
+			wp_maybe_auto_update();
+		}
+
+		return 'updating:' . $release['version'];
+	}
+
+	/**
+	 * Whether a hinted version is worth asking GitHub about: newer than the installed one and
+	 * than the release already known (so a release that cannot be installed is not asked for
+	 * every few minutes). Pure.
+	 *
+	 * @param string $hinted    The version on GitHub's main file.
+	 * @param string $installed The running version.
+	 * @param string $known     The latest release already known ('' = none).
+	 * @return bool
+	 */
+	public static function is_news( $hinted, $installed, $known ) {
+		return version_compare( $hinted, $installed, '>' ) && ( '' === $known || version_compare( $hinted, $known, '>' ) );
+	}
+
+	/**
+	 * The `Version:` header in a plugin file's opening bytes, or null. Pure.
+	 *
+	 * @param string $text File contents (or their start).
+	 * @return string|null
+	 */
+	public static function version_header( $text ) {
+		return preg_match( '/^[ \t\/*#@]*Version:[ \t]*(\d+\.\d+\.\d+)[ \t]*$/mi', (string) $text, $m ) ? $m[1] : null;
+	}
+
+	/**
+	 * The version GitHub's main file names, or null when it cannot be read.
+	 *
+	 * @return string|null
+	 */
+	private static function hinted_version() {
+		$response = wp_remote_get(
+			defined( 'QUISSLY_UPDATE_HINT_URL' ) ? (string) QUISSLY_UPDATE_HINT_URL : self::HINT_URL,
+			array(
+				'timeout' => 5,
+				'headers' => array(
+					'Range'      => 'bytes=0-2047', // the header block is at the top
+					'User-Agent' => 'quissly-for-woocommerce/' . QUISSLY_VERSION,
+				),
+			)
+		);
+		if ( is_wp_error( $response ) || ! in_array( (int) wp_remote_retrieve_response_code( $response ), array( 200, 206 ), true ) ) {
+			return null;
+		}
+
+		return self::version_header( (string) wp_remote_retrieve_body( $response ) );
 	}
 
 	/**

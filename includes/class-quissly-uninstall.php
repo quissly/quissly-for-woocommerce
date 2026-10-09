@@ -43,6 +43,8 @@ class Quissly_Uninstall {
 		if ( function_exists( 'as_unschedule_all_actions' ) ) {
 			as_unschedule_all_actions( '', array(), 'quissly' );
 		}
+		// The update hint (Quissly_Updater, a WP-Cron event).
+		wp_clear_scheduled_hook( 'quissly_update_hint' );
 
 		// Per-product ingested markers (Quissly_Sync_Worker::INGESTED_META) are runtime sync
 		// state, not configuration — remove unconditionally (like the queue table); a reinstall
