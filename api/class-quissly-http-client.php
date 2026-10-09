@@ -60,7 +60,7 @@ class Quissly_Http_Client {
 	 *
 	 * The SAME $ts_ms and $nonce must appear in the headers and in the signed string,
 	 * so they are passed in and reused here. No X-Service-UUID: a merchant's tenant token
-	 * authenticates without it (only admin tokens need it - docs/VERIFIED_API.md).
+	 * authenticates without it (only admin tokens need it).
 	 *
 	 * @param string $method HTTP method.
 	 * @param string $path   Request path.
