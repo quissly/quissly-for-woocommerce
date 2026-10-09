@@ -33,10 +33,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * also the signed `{op}.{ts}` payload, returns HTTP 200 with the real outcome in the BODY:
  * `status` + a per-item `data` map keyed by uuid carrying `q_external_id`, per-item `status`
  * and `reason`. interpret_status() classifies such a body; the sync never reads it.
- *
- * STILL OPEN: DELETE and PUT shapes are built per the documented contract but not yet
- * live-verified. The clean per-item SUCCESS status string is inferred (not yet observed — the
- * test store's items already exist, so every item reports the benign "already exists" skip).
  */
 class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 
@@ -54,7 +50,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 	}
 
 	/**
-	 * Send updates to ALREADY-INGESTED products via PUT (LIVE-VERIFIED). Used when a product
+	 * Send updates to ALREADY-INGESTED products via PUT (verified against the live API). Used when a product
 	 * has been ingested before — /add would reject it as a duplicate.
 	 *
 	 * @param array<int,array> $records Mapped records keyed by id.
@@ -98,7 +94,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 	 * per-item classifier (by q_external_id), for diagnostics (tests/live/*): the sync settles
 	 * on the send's answer and never reads the status.
 	 *
-	 * LIVE-CONFIRMED body shape (the corrected query-param status form returns HTTP 200 with
+	 * The body shape, verified against the live API (the corrected query-param status form returns HTTP 200 with
 	 * the real outcome in the BODY, not the HTTP code):
 	 *   { "type":"add", "status":"completed"|"partially completed"|...,
 	 *     "summary":{n_requested,n_successful,n_failed},
@@ -192,7 +188,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 	}
 
 	/**
-	 * Whether a status-body item is a genuine SUCCESS. LIVE-CONFIRMED per-item success string
+	 * Whether a status-body item is a genuine SUCCESS. The live API's per-item success string
 	 * is "successful" (top-level "completed"); the rest are defensive synonyms.
 	 *
 	 * @param mixed $item One entry of body.data.
@@ -229,7 +225,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 
 		$ts    = Quissly_Signer::format_timestamp_iso( microtime( true ) );
 		$first = (string) $ids[0];
-		// LIVE-CONFIRMED: delete carries `data` as an array of OBJECTS { "id": "<string id>" }
+		// verified against the live API: delete carries `data` as an array of OBJECTS { "id": "<string id>" }
 		// and the timestamp under `timestamp` (same key as add). A flat string array was
 		// REJECTED (422: "Input should be a valid dictionary"); an earlier `ts` key was also
 		// REJECTED (422). The signed ts matches the body's timestamp.
@@ -241,7 +237,7 @@ class Quissly_Live_Catalog_Client implements Quissly_Catalog_Client {
 	}
 
 	/**
-	 * The `data` array for a DELETE: an array of OBJECTS { "id": "<string id>" } (LIVE-CONFIRMED
+	 * The `data` array for a DELETE: an array of OBJECTS { "id": "<string id>" } (verified against the live API
 	 * shape). Ids are cast to STRING (FACT 1) but NOT intval'd — a non-numeric/UUID id must
 	 * survive intact. Pure + unit-testable.
 	 *

@@ -1,58 +1,50 @@
 /**
- * Configuration's suggestion lists (assets/js/quissly-config.js): removable pills in Quissly's
- * indigo and the add row - the Magento plugin's config-suggestions.css.
+ * Configuration's suggestion lists (assets/js/quissly-config.js), laid out as the Quissly
+ * Shopify app's Settings: Search Examples as rows with Remove and an add field, Search
+ * Suggestions' Manual list as one field per suggestion.
  */
-.q-suggestions { max-width: 520px; }
-.q-suggestions .q-pills {
+.q-list { max-width: 520px; }
+.q-list [hidden] { display: none !important; }
+
+/* Search Examples: one row per example. */
+.q-list__rows { margin: 0 0 14px; }
+.q-list__row {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	min-height: 38px;
-	padding: 10px;
-	border: 1px solid #8c8f94;
-	border-radius: 4px;
-	background: #fff;
-}
-.q-suggestions .q-pill {
-	display: inline-flex;
 	align-items: center;
-	gap: 4px;
-	max-width: 100%;
-	padding: 4px 4px 4px 12px;
-	border-radius: 999px;
-	background: #f1f1fa;
-	border: 1px solid #d4d4ef;
-	color: #3d3d9b;
-	font-size: 13px;
-	line-height: 1.4;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 0;
+	border-bottom: 1px solid #dcdcde;
 }
-.q-suggestions .q-pill__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.q-suggestions .q-pill__remove {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	background: transparent;
-	color: #3d3d9b;
-	font-size: 16px;
-	line-height: 1;
-	cursor: pointer;
-}
-.q-suggestions .q-pill__remove:hover,
-.q-suggestions .q-pill__remove:focus { background: #d4d4ef; color: #1d2327; }
-.q-suggestions .q-pills__empty { color: #646970; font-size: 13px; align-self: center; }
-.q-suggestions__add { display: flex; gap: 8px; margin-top: 10px; }
-.q-suggestions__add input { flex: 1; width: auto; }
-.q-suggestions__count.is-over { color: #b32d2e; }
-.q-suggestions__error { color: #b32d2e; margin: 6px 0 0; }
-.q-suggestions__reset { margin-top: 4px !important; }
-.q-suggestions [hidden] { display: none !important; }
+.q-list__row:first-child { border-top: 1px solid #dcdcde; }
+.q-list__text { overflow-wrap: anywhere; }
+.q-list__remove { flex: none; }
+.q-list__empty { color: #646970; margin: 0; }
+.q-list__add-label { display: block; font-weight: 600; margin-bottom: 6px; }
+.q-list__add { display: flex; gap: 8px; }
+.q-list__add input { flex: 1; width: auto; }
+.q-list__count.is-over { color: #b32d2e; }
+.q-list__reset { margin: 2px 0 6px; }
+
+/* Search Suggestions, Manual: a field per suggestion; the next appears when the last is filled. */
+.q-list__field { margin: 0 0 10px; }
+.q-list__field-label { display: block; font-weight: 600; margin-bottom: 4px; }
+.q-list__field input { width: 100%; }
+
+/* A multilingual store's Language select over the lists. */
 .q-languages__select { margin: 0 0 4px; }
 .q-languages__select label { font-weight: 600; }
 .q-languages__select select { min-width: 240px; margin-top: 6px; }
 .q-languages > .description { max-width: 520px; margin-bottom: 12px; }
 .q-languages [hidden] { display: none !important; }
+
+/* Search Suggestions: Manual's lists sit under the "Suggestions" select. */
+.q-manual-examples { margin-top: 18px; }
+.q-manual-examples[hidden] { display: none !important; }
+
+/* WooCommerce's dropdowns (selectWoo) on this page: WordPress's field height and border. */
+.quissly-config .select2-container .select2-selection--single { height: 36px; border-color: #8c8f94; border-radius: 4px; }
+.quissly-config .select2-container .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; color: #1d2327; }
+.quissly-config .select2-container .select2-selection--single .select2-selection__arrow { height: 34px; }
+.quissly-config .select2-container--focus .select2-selection--single,
+.quissly-config .select2-container--open .select2-selection--single { border-color: #2271b1; box-shadow: 0 0 0 1px #2271b1; }

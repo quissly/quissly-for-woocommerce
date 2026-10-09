@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * widget and announces each change as a `quissly:generic-cart-sync` window event,
  * detail = { productId: quantity }. The product ids there are QUISSLY'S OWN ids -
  * uuid5( qsearch service's quissly_service_link, "<product id>" ) - not WooCommerce ids
- * (LIVE-CONFIRMED 2026-09-24).
+ * (verified against the live API).
  *
  * assets/js/chat-cart.js listens for that event and:
  *  - translates the ids through `?wc-ajax=quissly_cart_resolve` (this class: uuid5 over

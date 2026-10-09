@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * `POST /v2beta/qsearch/suggestions_enrich` (v2-signed, like a search) writes a store's search
  * bar suggestions itself: Quissly generates them in each language, checks each one finds
  * products, and writes them into the QSearch service's widget_config, keeping any list the
- * merchant edited. Every Quissly connector calls it (the Shopify app's showcase-queries.ts; the
+ * merchant edited. Every Quissly connector calls it (the Shopify app; the
  * Magento and CS-Cart plugins have the same); no plugin holds a model key. What the plugin sends
  * is what only the store knows: its language and its catalog as shoppers read it.
  *

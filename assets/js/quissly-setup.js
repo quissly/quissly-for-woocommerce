@@ -159,7 +159,7 @@
             });
         });
 
-        // What Quissly's backend accepts (the Shopify app's email-validation.ts), checked as the
+        // What Quissly accepts for an account email, checked as the
         // merchant types; the server checks again.
         var LOCAL_PART = /^[\p{L}\p{N}_!#$%&'*+\-/=?^`{|}~]+(?:\.[\p{L}\p{N}_!#$%&'*+\-/=?^`{|}~]+)*$/u;
         var TYPED_LABEL = /^[\p{L}\p{Nd}](?:[\p{L}\p{Nd}-]*[\p{L}\p{Nd}])?$/u;

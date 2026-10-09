@@ -21,7 +21,7 @@ class Quissly_Response_Parser {
 	/**
 	 * Parse a qsearch / qimage response.
 	 *
-	 * LIVE-CONFIRMED id source (FINAL): qsearch returns the WooCommerce post id at top-level
+	 * The id source (verified against the live API): qsearch returns the WooCommerce post id at top-level
 	 * documents[].id (integer), with include_metadata:false. Read documents[].id for post__in.
 	 * (History: an interim backend version returned a UUIDv5 and required reading
 	 * metadata.q_external_id with include_metadata:true; the backend now returns the post id

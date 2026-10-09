@@ -23,7 +23,7 @@ class Quissly_Http_Client {
 	/**
 	 * X-Platform header value. The single place the value lives — do NOT hardcode it elsewhere.
 	 * (History: the LB temporarily required 'shopify'; it now accepts 'woocommerce', the real
-	 * platform value for this plugin — LIVE-CONFIRMED to authenticate with HTTP 200.)
+	 * platform value for this plugin — verified against the live API to authenticate with HTTP 200.)
 	 *
 	 * @var string
 	 */
@@ -183,7 +183,7 @@ class Quissly_Http_Client {
 	}
 
 	/**
-	 * GET a v1 catalog operation status. LIVE-CONFIRMED form: GET /v1beta/catalog with QUERY
+	 * GET a v1 catalog operation status. The form verified against the live API: GET /v1beta/catalog with QUERY
 	 * PARAMS (operation_id, timestamp, service=search) — NOT path segments. The timestamp is
 	 * a FRESH current-UTC ISO 8601 string (T separator, 6-digit microseconds, +00:00); the
 	 * signed payload `{operation_id}.{timestamp}` uses that SAME fresh timestamp. (The old

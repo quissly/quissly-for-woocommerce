@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    no wishlist of its own);
  *  - purchase: when the order reaches one of WooCommerce's paid statuses (wc_get_is_paid_statuses:
  *    processing, completed) - cash on delivery at checkout, a bank transfer when the merchant marks
- *    it paid (Keso, 2026-10-08: "when it is paid"); once per order (order meta PURCHASE_META);
+ *    it paid; once per order (order meta PURCHASE_META);
  *  - product page view and search: the browser (assets/js/events.js -> wc-ajax=quissly_event),
  *    since a page cache serves those pages without running PHP.
  *

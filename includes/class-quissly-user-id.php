@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Resolves the `user_id` sent with every search/quick/image request, in the Shopify app's
- * scheme (its storefront-identity.server.ts) so every platform reports shoppers alike:
+ * scheme, so every platform reports shoppers alike:
  *
  *   customer:<id>  a logged-in WordPress user - stable across devices and sessions;
  *   guest:<uuid>   an anonymous browser - a UUID minted into a first-party cookie for a year.

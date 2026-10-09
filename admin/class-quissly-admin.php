@@ -36,7 +36,7 @@ class Quissly_Admin {
 	public function register() {
 		add_action( 'admin_menu', array( $this, 'register_menus' ) );
 		add_action( 'admin_notices', array( $this, 'maybe_setup_notice' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ), 20 ); // after WooCommerce registers its scripts (selectWoo)
 		add_action( 'admin_post_quissly_save_settings', array( $this, 'handle_save_settings' ) );
 		add_action( 'admin_post_quissly_save_dashboard', array( $this, 'handle_save_dashboard' ) );
 		add_action( 'admin_post_quissly_wizard', array( $this, 'handle_wizard' ) );
@@ -57,8 +57,10 @@ class Quissly_Admin {
 			return;
 		}
 		if ( false !== strpos( (string) $hook, self::PAGE_SETTINGS ) ) {
-			wp_enqueue_style( 'quissly-config', QUISSLY_PLUGIN_URL . 'assets/css/quissly-config.css', array(), QUISSLY_VERSION );
-			wp_enqueue_script( 'quissly-config', QUISSLY_PLUGIN_URL . 'assets/js/quissly-config.js', array(), QUISSLY_VERSION, true );
+			// WooCommerce's own dropdowns (selectWoo, as on its settings pages) when it has them.
+			$select_woo = wp_script_is( 'selectWoo', 'registered' ) && wp_style_is( 'woocommerce_admin_styles', 'registered' );
+			wp_enqueue_style( 'quissly-config', QUISSLY_PLUGIN_URL . 'assets/css/quissly-config.css', $select_woo ? array( 'woocommerce_admin_styles' ) : array(), QUISSLY_VERSION );
+			wp_enqueue_script( 'quissly-config', QUISSLY_PLUGIN_URL . 'assets/js/quissly-config.js', $select_woo ? array( 'jquery', 'selectWoo' ) : array(), QUISSLY_VERSION, true );
 			return;
 		}
 		if ( 'toplevel_page_' . self::MENU_SLUG !== $hook ) {
@@ -314,8 +316,8 @@ class Quissly_Admin {
 
 	/**
 	 * Configuration: setup (until it is finished), then the settings in collapsible sections, as
-	 * the Magento plugin's Configuration page has them - Features, Search bar suggestions,
-	 * Catalog data, Advanced. One form and one Save button for all of them (the save handler is
+	 * the Magento plugin's Configuration page has them - Features, Search Examples, Search
+	 * Suggestions (the Shopify app's names), Catalog data, Advanced. One form and one Save button for all of them (the save handler is
 	 * unchanged); a section is a <details>, so it opens and closes without script, and the page
 	 * remembers which ones the merchant left open. Reads/writes the same options as the WC
 	 * Integrations tab.
@@ -348,33 +350,6 @@ class Quissly_Admin {
 		$this->section_open( 'features', __( 'Features', 'quissly-for-woocommerce' ), true );
 		$this->toggle_row( 'quissly_enable_search', __( 'Enable QSearch', 'quissly-for-woocommerce' ), __( 'Quissly answers your store\'s searches. Search interception activates only after the first full catalog sync completes.', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_overlay', __( 'Search overlay takes over the theme\'s search box', 'quissly-for-woocommerce' ), __( 'When on, clicking the theme\'s search box opens a full-width search bar at the top of a blurred page, with Quick\'s suggestions under it when Quick is on. Presentation only - results are unaffected. If your theme has no search box at all, Quissly adds a search button whatever this is set to; the mount point below says where it goes.', 'quissly-for-woocommerce' ) );
-		$this->toggle_row( 'quissly_overlay_suggestions', __( 'Suggestions under the search bar', 'quissly-for-woocommerce' ), __( 'The overlay shows suggestions under the bar, as buttons a shopper can click to search, while the bar is empty. On by default.', 'quissly-for-woocommerce' ) );
-
-		// Which ones: the Shopify app's "Search suggestions" setting (here "Search Examples"), drawn
-		// as its segmented "Automatic | Manual" control (two radios; the list shows only for Manual).
-		$mode = Quissly_Settings::get( 'quissly_overlay_suggestions_mode' );
-		echo '<tr><th scope="row">' . esc_html__( 'Search Examples', 'quissly-for-woocommerce' ) . '</th><td>';
-		echo '<div class="q-segmented" role="radiogroup" aria-label="' . esc_attr__( 'Search Examples', 'quissly-for-woocommerce' ) . '">';
-		foreach ( array( 'automatic' => __( 'Automatic', 'quissly-for-woocommerce' ), 'manual' => __( 'Manual', 'quissly-for-woocommerce' ) ) as $value => $label ) {
-			echo '<input type="radio" name="quissly_overlay_suggestions_mode" id="quissly_overlay_suggestions_mode_' . esc_attr( $value ) . '" value="' . esc_attr( $value ) . '"' . checked( $mode, $value, false ) . ' />';
-			echo '<label for="quissly_overlay_suggestions_mode_' . esc_attr( $value ) . '">' . esc_html( $label ) . '</label>';
-		}
-		echo '</div>';
-		echo '<p class="description">' . esc_html__( 'Buttons shown when search opens. Automatic: Quissly picks them from your catalog. Manual: you type them.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
-		echo '<tr id="quissly_overlay_suggestions_manual_row"' . ( 'manual' === $mode ? '' : ' hidden' ) . '><th scope="row"><label for="quissly_overlay_suggestions_manual">' . esc_html__( 'Your examples', 'quissly-for-woocommerce' ) . '</label></th><td>';
-		$manual_by_language = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
-		$this->language_lists(
-			'quissly_overlay_suggestions_manual',
-			(string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ),
-			'quissly_overlay_suggestions_manual_by_language',
-			$manual_by_language,
-			array(),
-			array(),
-			Quissly_Search_Suggestions::MAX_CHIPS,
-			__( 'Add an example, e.g. black shorts size 32', 'quissly-for-woocommerce' ),
-			__( 'No examples yet - with none, no buttons are shown.', 'quissly-for-woocommerce' )
-		);
-		echo '</td></tr>';
 		$this->text_row( 'quissly_overlay_mount_selector', __( 'Search button mount point', 'quissly-for-woocommerce' ), __( 'Only used when your theme has no search box. A CSS selector for an existing header control - your cart, account or language switcher - and the search button is placed just to its left. Leave empty to auto-detect: the cart, then the account link, then the language switcher, else a floating button at the bottom-left. Example: .site-header-cart', 'quissly-for-woocommerce' ) );
 
 		$this->toggle_row( 'quissly_enable_quick', __( 'Quick Recommendations', 'quissly-for-woocommerce' ), __( 'As a shopper types, show recommended products straight away in a dropdown under the search box, so they can jump to an item without running a full search.', 'quissly-for-woocommerce' ) );
@@ -394,9 +369,14 @@ class Quissly_Admin {
 		$this->toggle_row( 'quissly_enable_events', __( 'Shopping activity for Quissly analytics', 'quissly-for-woocommerce' ), __( 'Sends product page views, searches, adds to cart and to the wishlist (YITH WooCommerce Wishlist), and paid orders to Quissly, for the analytics in the Quissly Admin Panel. Products and order totals only - never a customer\'s name, email, address or IP. A guest who has not consented to statistics cookies is not tracked. On by default.', 'quissly-for-woocommerce' ) );
 		$this->section_close();
 
-		// --- Search bar suggestions -----------------------------------------------------------
-		$this->section_open( 'search-suggestions', __( 'Search bar suggestions', 'quissly-for-woocommerce' ), false, 'quissly-search-suggestions' );
+		// --- Search Examples: the typing animation (the Shopify app's name) -------------------
+		$this->section_open( 'search-examples', __( 'Search Examples', 'quissly-for-woocommerce' ), false, 'quissly-search-examples' );
 		$this->render_search_suggestions();
+		$this->section_close();
+
+		// --- Search Suggestions: the buttons shown when search opens (the Shopify app's name) --
+		$this->section_open( 'search-suggestions', __( 'Search Suggestions', 'quissly-for-woocommerce' ), false, 'quissly-search-suggestions' );
+		$this->render_suggestion_buttons();
 		$this->section_close();
 
 		// --- Catalog data --------------------------------------------------------------------
@@ -456,8 +436,7 @@ class Quissly_Admin {
 
 	/**
 	 * The sections' look (the Magento plugin's Configuration groups: a title bar, a round chevron
-	 * on the right, a rule between them), the segmented control's, and the small script that
-	 * remembers open sections and shows "Your examples" only for Manual.
+	 * on the right, a rule between them) and the small script that remembers open sections.
 	 */
 	private function print_section_assets() {
 		echo '<style>'
@@ -473,19 +452,17 @@ class Quissly_Admin {
 			. '.quissly-config .q-section__body{padding:0 4px 18px}'
 			. '.quissly-config .q-section__body>.form-table{margin-top:0}'
 			. '.quissly-config .q-section__body .form-table td .form-table{margin:0}'
-			. '.q-segmented{display:inline-flex;gap:2px;padding:4px;border-radius:12px;background:#dcdcde}.q-segmented input{position:absolute;opacity:0;pointer-events:none}.q-segmented label{min-width:118px;padding:8px 22px;border-radius:9px;text-align:center;font-size:14px;line-height:20px;color:#303030;cursor:pointer}.q-segmented label:hover{background:rgba(0,0,0,.04)}.q-segmented input:checked+label{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.06)}.q-segmented input:focus-visible+label{outline:2px solid #2271b1;outline-offset:1px}'
 			. '</style>';
 		echo '<script>document.addEventListener("DOMContentLoaded",function(){'
 			. 'var key="quissly_config_sections",open={};try{open=JSON.parse(localStorage.getItem(key)||"{}")||{};}catch(e){}'
 			. 'document.querySelectorAll("details[data-q-section]").forEach(function(d){var k=d.getAttribute("data-q-section");if(k in open){d.open=!!open[k];}'
 			. 'if(location.hash&&d.id&&location.hash==="#"+d.id){d.open=true;}'
 			. 'd.addEventListener("toggle",function(){open[k]=d.open;try{localStorage.setItem(key,JSON.stringify(open));}catch(e){}});});'
-			. 'document.querySelectorAll(\'input[name="quissly_overlay_suggestions_mode"]\').forEach(function(r){r.addEventListener("change",function(){document.getElementById("quissly_overlay_suggestions_manual_row").hidden=r.value!=="manual";});});'
 			. '});</script>';
 	}
 
 	/**
-	 * Configuration's "Search bar suggestions" section (the Shopify app's): the queries the
+	 * Configuration's "Search Examples" section (the Shopify app's): the queries the
 	 * search overlay types into its empty bar. They live in Quissly
 	 * (Quissly_Search_Suggestions), so the section shows what Quissly holds now and the save
 	 * handler writes a changed list back.
@@ -498,18 +475,15 @@ class Quissly_Admin {
 			return;
 		}
 		echo '<tr hidden><td colspan="2"><input type="hidden" name="quissly_suggestions_present" value="1" /></td></tr>';
-		// The Magento plugin's layout: a Yes/No select, then the list as pills.
-		echo '<tr><th scope="row"><label for="quissly_typing_enabled">' . esc_html__( 'Show typing suggestions', 'quissly-for-woocommerce' ) . '</label></th><td>';
-		echo '<select name="quissly_typing_enabled" id="quissly_typing_enabled">';
-		echo '<option value="1"' . selected( $current['enabled'], true, false ) . '>' . esc_html__( 'Yes', 'quissly-for-woocommerce' ) . '</option>';
-		echo '<option value="0"' . selected( $current['enabled'], false, false ) . '>' . esc_html__( 'No', 'quissly-for-woocommerce' ) . '</option>';
-		echo '</select></td></tr>';
-		echo '<tr><th scope="row"><label for="quissly_suggestions">' . esc_html__( 'Suggestions', 'quissly-for-woocommerce' ) . '</label></th><td>';
+		// A checkbox (the Shopify app's), then the list as the Shopify app's rows.
+		echo '<tr><th scope="row">' . esc_html__( 'Show typing suggestions', 'quissly-for-woocommerce' ) . '</th><td>';
+		echo '<label><input type="checkbox" name="quissly_typing_enabled" id="quissly_typing_enabled" value="1"' . checked( $current['enabled'], true, false ) . ' /> ' . esc_html__( 'Enabled', 'quissly-for-woocommerce' ) . '</label></td></tr>';
+		echo '<tr><th scope="row"><label for="quissly_suggestions">' . esc_html__( 'Examples', 'quissly-for-woocommerce' ) . '</label></th><td>';
 		// "Reset to generated" (the Shopify app's): the list Quissly built from the catalog.
 		$generated = ! empty( $current['generated'] ) ? $current['generated'] : Quissly_Showcase_Runner::generated();
 		$empty     = empty( $current['queries'] ) && ! Quissly_Showcase_Runner::finished() && Quissly_Showcase_Runner::enabled()
-			? __( 'Left empty, suggestions are generated from your catalog after the first catalog sync - each one checked to find products.', 'quissly-for-woocommerce' )
-			: __( 'No suggestions - the bar keeps its plain placeholder.', 'quissly-for-woocommerce' );
+			? __( 'Left empty, examples are generated from your catalog after the first catalog sync - each one checked to find products.', 'quissly-for-woocommerce' )
+			: __( 'No suggestions yet. The bar shows "Search products…".', 'quissly-for-woocommerce' );
 		$this->language_lists(
 			'quissly_suggestions',
 			implode( "\n", $current['queries'] ),
@@ -523,16 +497,58 @@ class Quissly_Admin {
 			$generated,
 			$current['generated_by_language'],
 			Quissly_Search_Suggestions::MAX_COUNT,
-			__( 'Add a suggestion, e.g. waterproof jacket', 'quissly-for-woocommerce' ),
-			$empty
+			__( 'e.g. waterproof jacket under $100', 'quissly-for-woocommerce' ),
+			$empty,
+			'rows'
 		);
 		echo '</td></tr>';
 	}
 
 	/**
-	 * A suggestion list per language (the Magento plugin's Language select): on a multilingual
-	 * store a Language select over one pill list per language, the main language's first (its
-	 * field is $name; another's is $name_by_language[key]); else the one list.
+	 * Configuration's "Search Suggestions" section (the Shopify app's): the buttons the search
+	 * overlay shows under its empty bar - on or off, and which ones (Automatic: what Quissly
+	 * generated; Manual: the merchant's own list, per language).
+	 */
+	private function render_suggestion_buttons() {
+		echo '<tr><td colspan="2" style="padding-left:0"><p class="description" style="max-width:760px;margin:0">' . esc_html__( 'Buttons shown when search opens, under the empty search bar. A click searches for it.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
+		$this->toggle_row( 'quissly_overlay_suggestions', __( 'Show suggestion buttons', 'quissly-for-woocommerce' ), __( 'On by default.', 'quissly-for-woocommerce' ) );
+
+		// Which ones: the Shopify app's "Suggestions" select (Automatic / Manual), its note saying
+		// what the choice means; Manual's lists show under it only for Manual (quissly-config.js).
+		$mode  = Quissly_Settings::get( 'quissly_overlay_suggestions_mode' );
+		$notes = array(
+			'automatic' => __( 'Quissly picks them from your catalog, per language.', 'quissly-for-woocommerce' ),
+			'manual'    => __( 'You type them, per store language.', 'quissly-for-woocommerce' ),
+		);
+		echo '<tr><th scope="row"><label for="quissly_overlay_suggestions_mode">' . esc_html__( 'Suggestions', 'quissly-for-woocommerce' ) . '</label></th><td>';
+		echo '<select name="quissly_overlay_suggestions_mode" id="quissly_overlay_suggestions_mode">';
+		foreach ( array( 'automatic' => __( 'Automatic', 'quissly-for-woocommerce' ), 'manual' => __( 'Manual', 'quissly-for-woocommerce' ) ) as $value => $label ) {
+			echo '<option value="' . esc_attr( $value ) . '"' . selected( $mode, $value, false ) . '>' . esc_html( $label ) . '</option>';
+		}
+		echo '</select>';
+		echo '<p class="description" id="quissly_overlay_suggestions_mode_note" data-automatic="' . esc_attr( $notes['automatic'] ) . '" data-manual="' . esc_attr( $notes['manual'] ) . '">' . esc_html( $notes[ 'manual' === $mode ? 'manual' : 'automatic' ] ) . '</p>';
+		// Manual's own lists, under the select they belong to (shown only for Manual).
+		echo '<div id="quissly_overlay_suggestions_manual_row" class="q-manual-examples"' . ( 'manual' === $mode ? '' : ' hidden' ) . '>';
+		$manual_by_language = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
+		$this->language_lists(
+			'quissly_overlay_suggestions_manual',
+			(string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' ),
+			'quissly_overlay_suggestions_manual_by_language',
+			$manual_by_language,
+			array(),
+			array(),
+			Quissly_Search_Suggestions::MAX_CHIPS,
+			__( 'e.g. black shorts size 32', 'quissly-for-woocommerce' ),
+			'',
+			'fields'
+		);
+		echo '</div></td></tr>';
+	}
+
+	/**
+	 * A suggestion list per language (the Shopify app's Language select): on a multilingual store
+	 * a Language select over one list per language, the main language's first (its field is
+	 * $name; another's is $name_by_language[key]); else the one list.
 	 *
 	 * @param string                 $name                  The main list's field.
 	 * @param string                 $value                 The main list, one per line.
@@ -541,12 +557,13 @@ class Quissly_Admin {
 	 * @param string[]               $generated             The main language's generated list.
 	 * @param array<string,string[]> $generated_by_language The others' generated lists.
 	 * @param int                    $max                   At most this many each.
-	 * @param string                 $placeholder           The add box's placeholder.
-	 * @param string                 $empty                 Shown while a list is empty.
+	 * @param string                 $placeholder           The (first) field's placeholder.
+	 * @param string                 $empty                 Shown while a list is empty (rows).
+	 * @param string                 $style                 rows | fields (list_editor()).
 	 */
-	private function language_lists( $name, $value, $name_by_language, array $by_language, array $generated, array $generated_by_language, $max, $placeholder, $empty ) {
+	private function language_lists( $name, $value, $name_by_language, array $by_language, array $generated, array $generated_by_language, $max, $placeholder, $empty, $style ) {
 		if ( ! Quissly_Languages::is_multilingual() ) {
-			$this->pills_list( $name, $name, $value, $max, $generated, $placeholder, $empty );
+			$this->list_editor( $name, $name, $value, $max, $generated, $placeholder, $empty, $style );
 			return;
 		}
 		$languages = Quissly_Languages::languages();
@@ -560,14 +577,14 @@ class Quissly_Admin {
 			echo '<option value="' . esc_attr( $language['key'] ) . '">' . esc_html( $label ) . '</option>';
 		}
 		echo '</select></p>';
-		echo '<p class="description">' . esc_html__( 'Shoppers see the list for the language they browse your store in. A language with no list of its own shows none.', 'quissly-for-woocommerce' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Shoppers see the list for the language they browse your store in. A language with no list of its own uses the default one.', 'quissly-for-woocommerce' ) . '</p>';
 		foreach ( $languages as $index => $language ) {
 			$key = $language['key'];
 			echo '<div data-q-language="' . esc_attr( $key ) . '"' . ( 0 === $index ? '' : ' hidden' ) . '>';
 			if ( $language['main'] ) {
-				$this->pills_list( $name, $name, $value, $max, $generated, $placeholder, $empty );
+				$this->list_editor( $name, $name, $value, $max, $generated, $placeholder, $empty, $style );
 			} else {
-				$this->pills_list( $name_by_language . '[' . $key . ']', $name_by_language . '_' . $key, (string) ( $by_language[ $key ] ?? '' ), $max, (array) ( $generated_by_language[ $key ] ?? array() ), $placeholder, $empty );
+				$this->list_editor( $name_by_language . '[' . $key . ']', $name_by_language . '_' . $key, (string) ( $by_language[ $key ] ?? '' ), $max, (array) ( $generated_by_language[ $key ] ?? array() ), $placeholder, $empty, $style );
 			}
 			echo '</div>';
 		}
@@ -575,20 +592,22 @@ class Quissly_Admin {
 	}
 
 	/**
-	 * A suggestion list edited as removable pills (assets/js/quissly-config.js, the Magento
-	 * plugin's editor): a textarea with one per line - what the form saves - which the script
-	 * hides and draws as pills, an add row, "N of max" and, with a generated list, "Reset to
-	 * generated". Without the script the textarea stays.
+	 * A suggestion list as the Shopify app's Settings edits it (assets/js/quissly-config.js): a
+	 * textarea with one per line - what the form saves - which the script hides and draws as
+	 * `rows` (Search Examples: a row per entry with Remove, "Add a suggestion", "N of max",
+	 * "Reset to generated") or `fields` (Search Suggestions, Manual: a field per entry, the next
+	 * appearing when the last is filled). Without the script the textarea stays.
 	 *
 	 * @param string   $name        Field name.
 	 * @param string   $id          Field id.
 	 * @param string   $value       One per line.
 	 * @param int      $max         At most this many.
 	 * @param string[] $generated   The generated list ("Reset to generated"), or none.
-	 * @param string   $placeholder The add box's placeholder.
-	 * @param string   $empty       Shown while the list is empty.
+	 * @param string   $placeholder The add field's (rows) or first field's (fields) placeholder.
+	 * @param string   $empty       Shown while the list is empty (rows).
+	 * @param string   $style       rows | fields.
 	 */
-	private function pills_list( $name, $id, $value, $max, array $generated, $placeholder, $empty ) {
+	private function list_editor( $name, $id, $value, $max, array $generated, $placeholder, $empty, $style ) {
 		$config = array(
 			'max'       => (int) $max,
 			'maxLength' => Quissly_Search_Suggestions::MAX_LENGTH,
@@ -596,19 +615,19 @@ class Quissly_Admin {
 			'text'      => array(
 				'placeholder' => $placeholder,
 				'empty'       => $empty,
+				'addLabel'    => __( 'Add a suggestion', 'quissly-for-woocommerce' ),
 				'add'         => __( 'Add', 'quissly-for-woocommerce' ),
 				'remove'      => __( 'Remove', 'quissly-for-woocommerce' ),
 				'reset'       => __( 'Reset to generated', 'quissly-for-woocommerce' ),
 				/* translators: 1: number in the list, 2: the most allowed - keep %1 and %2 as they are. */
-				'count'       => 20 === (int) $max ? __( '%1 of %2. 10 is usually more than enough, but you can add up to %2.', 'quissly-for-woocommerce' ) : __( '%1 of %2.', 'quissly-for-woocommerce' ),
-				/* translators: %1: maximum length - keep %1 as it is. */
-				'tooLong'     => __( 'Keep it under %1 characters.', 'quissly-for-woocommerce' ),
-				'duplicate'   => __( 'That one is already in the list.', 'quissly-for-woocommerce' ),
-				/* translators: %d: maximum length. */
-				'help'        => sprintf( __( 'Each under %d characters. Click × to remove one.', 'quissly-for-woocommerce' ), Quissly_Search_Suggestions::MAX_LENGTH ),
+				'count'       => __( '%1 of %2. 10 is usually more than enough, but you can add up to %2.', 'quissly-for-woocommerce' ),
+				/* translators: %1: the field's number - keep %1 as it is. */
+				'fieldLabel'  => __( 'Suggestion %1', 'quissly-for-woocommerce' ),
+				/* translators: %2: the most allowed - keep %2 as it is. */
+				'fieldsHelp'  => __( 'Fill one and the next field appears. Up to %2.', 'quissly-for-woocommerce' ),
 			),
 		);
-		echo '<textarea name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" rows="5" class="large-text" style="max-width:520px" data-q-pills data-config="' . esc_attr( (string) wp_json_encode( $config ) ) . '">' . esc_textarea( $value ) . '</textarea>';
+		echo '<textarea name="' . esc_attr( $name ) . '" id="' . esc_attr( $id ) . '" rows="5" class="large-text" style="max-width:520px" data-q-list="' . esc_attr( 'fields' === $style ? 'fields' : 'rows' ) . '" data-config="' . esc_attr( (string) wp_json_encode( $config ) ) . '">' . esc_textarea( $value ) . '</textarea>';
 	}
 
 	/**

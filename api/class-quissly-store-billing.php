@@ -10,8 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Client for chat-backend-middleware's `app/applications/billing/store_router.py`
- * (STORE_BILLING_API.md), on the console host. `GET /plans` is public; every other route
+ * Client for Quissly's store billing API, on the console host. `GET /plans` is public; every other route
  * takes the store's API key in `X-Store-Api-Key` - the key Connect stored, sent from this
  * server only and never to the browser. Paid plans are sold only while Quissly's billing is
  * open (`billing_open`, otherwise a 403); the Free plan and reading the store's own plans

@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * WooCommerce pre-selects a variation from URL params named `attribute_<attribute key>` whose
  * values are the variation's stored attribute values (taxonomy attrs keep the `pa_` prefix and
- * use the term slug; custom attrs use the bare name and the option value) — LIVE-CONFIRMED:
+ * use the term slug; custom attrs use the bare name and the option value) — verified against the live API:
  * variation 35 (parent 12) -> get_attributes() == { pa_color: blue, logo: Yes } ->
  * ?attribute_pa_color=blue&attribute_logo=Yes.
  */

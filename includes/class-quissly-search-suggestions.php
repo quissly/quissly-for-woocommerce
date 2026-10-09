@@ -25,8 +25,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * A multilingual store (WPML, Polylang - Quissly_Languages) has a list per language, in the
  * Magento plugin's keys: `client_specific_queries` is the main language's (named in
  * `client_specific_queries_language`), the others are under `client_specific_queries_by_language`.
- * A shopper sees their language's list; a language without one shows none rather than another
- * language's.
+ * A shopper sees their language's list; a language without one uses the main language's (the
+ * Shopify app's rule).
  *
  * clean(), validate(), from_config(), pick() and pick_generated() are pure (unit-tested).
  */
@@ -148,16 +148,15 @@ class Quissly_Search_Suggestions {
 	/**
 	 * The typing list for a shopper's language: the main list in the main language (or with
 	 * no language given), else that language's list (or its base language's: "pt-br" ->
-	 * "pt"). Another language without a list gets the main list on a single-language store
-	 * and none on a multilingual one - never text in a language the page is not in. PURE.
+	 * "pt"), else the main list - the Shopify app's "a language with no list of its own uses
+	 * the default one". PURE.
 	 *
-	 * @param array  $lists        from_config().
-	 * @param string $language     The shopper's language key.
-	 * @param string $main         The main language's key (when the config does not say).
-	 * @param bool   $multilingual The store has more than one language.
+	 * @param array  $lists    from_config().
+	 * @param string $language The shopper's language key.
+	 * @param string $main     The main language's key (when the config does not say).
 	 * @return string[]
 	 */
-	public static function pick( array $lists, $language, $main, $multilingual ) {
+	public static function pick( array $lists, $language, $main ) {
 		$main     = '' !== ( $lists['language'] ?? '' ) ? $lists['language'] : (string) $main;
 		$language = strtolower( str_replace( '_', '-', trim( (string) $language ) ) );
 		if ( '' === $language || $language === $main ) {
@@ -166,7 +165,7 @@ class Quissly_Search_Suggestions {
 		$by_language = (array) ( $lists['by_language'] ?? array() );
 		$base        = explode( '-', $language )[0];
 
-		return $by_language[ $language ] ?? $by_language[ $base ] ?? ( $multilingual ? array() : (array) ( $lists['queries'] ?? array() ) );
+		return $by_language[ $language ] ?? $by_language[ $base ] ?? (array) ( $lists['queries'] ?? array() );
 	}
 
 	/**
@@ -176,24 +175,21 @@ class Quissly_Search_Suggestions {
 	 * merchant edited the typing list), else the generated main list; none before anything was
 	 * generated. At most MAX_CHIPS. PURE.
 	 *
-	 * On a multilingual store ($main given), a language other than the main one never falls
-	 * back to the main language's list.
+	 * A language without a list of its own gets the main language's (then the generated main
+	 * list), as the Shopify app's chipsForLocale().
 	 *
 	 * @param array  $lists    from_config().
 	 * @param string $language Language key ("en", "pt-br").
-	 * @param string $main     A multilingual store's main language key ('' = one language).
+	 * @param string $main     The main language's key ('' = not known).
 	 * @return string[]
 	 */
 	public static function pick_generated( array $lists, $language, $main = '' ) {
 		$by_language = (array) ( $lists['generated_by_language'] ?? array() );
 		$language    = strtolower( str_replace( '_', '-', trim( (string) $language ) ) );
-		foreach ( array( $language, explode( '-', $language )[0] ) as $key ) {
+		foreach ( array( $language, explode( '-', $language )[0], strtolower( (string) $main ) ) as $key ) {
 			if ( '' !== $key && ! empty( $by_language[ $key ] ) ) {
 				return array_slice( array_values( $by_language[ $key ] ), 0, self::MAX_CHIPS );
 			}
-		}
-		if ( '' !== $main && '' !== $language && $language !== $main ) {
-			return array();
 		}
 
 		return array_slice( array_values( (array) ( $lists['generated'] ?? array() ) ), 0, self::MAX_CHIPS );
@@ -208,7 +204,7 @@ class Quissly_Search_Suggestions {
 	public static function for_storefront() {
 		$lists = self::storefront_lists();
 
-		return $lists['enabled'] ? self::pick( $lists, Quissly_Languages::current_key(), Quissly_Languages::main_key(), Quissly_Languages::is_multilingual() ) : array();
+		return $lists['enabled'] ? self::pick( $lists, Quissly_Languages::current_key(), Quissly_Languages::main_key() ) : array();
 	}
 
 	/**
@@ -217,9 +213,7 @@ class Quissly_Search_Suggestions {
 	 * @return string[]
 	 */
 	public static function generated_for_storefront() {
-		$main = Quissly_Languages::is_multilingual() ? Quissly_Languages::main_key() : '';
-
-		return self::pick_generated( self::storefront_lists(), Quissly_Languages::current_key(), $main );
+		return self::pick_generated( self::storefront_lists(), Quissly_Languages::current_key(), Quissly_Languages::main_key() );
 	}
 
 	/**

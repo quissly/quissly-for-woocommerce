@@ -11,11 +11,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * `POST /v2beta/qsearch/events`: the five events the Quissly Shopify app sends, in its shape
- * (quissly.client.server.ts, webhooks.orders.paid.tsx; the Magento and CS-Cart plugins send
- * the same) - a product page view, a search, an add to cart, an add to the wishlist (WooCommerce
+ * (the Magento and CS-Cart plugins send the same) - a product page view, a search, an add to cart, an add to the wishlist (WooCommerce
  * has no wishlist of its own: sent for YITH WooCommerce Wishlist, the most used one) and a paid
- * order. The engine stores each row in BigQuery (`qsearch_event_logs`), where the Quissly Admin
- * Panel's e-commerce and conversion tabs count them by type and day. Everything that is not a
+ * order. Quissly keeps each one, and the Quissly Admin Panel's e-commerce and conversion tabs
+ * count them by type and day. Everything that is not a
  * body field goes in `metadata`, which the engine keeps as it is.
  *
  * Ids are strings (the catalog's own); prices are strings with two decimals, as Shopify's order
@@ -148,7 +147,7 @@ final class Quissly_Event_Body {
 
 	/**
 	 * The request body. `event_id` is chosen here, once: a send that times out after Quissly
-	 * stored the row is sent again with the same id, which the engine's insert de-duplicates on.
+	 * stored the row is sent again with the same id, which Quissly de-duplicates on.
 	 *
 	 * @param string      $type     One of the constants.
 	 * @param array       $metadata From one of the methods above.

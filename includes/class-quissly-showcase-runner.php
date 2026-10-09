@@ -1,7 +1,7 @@
 <?php
 /**
- * Search bar suggestions, asked of Quissly in the background (port of the Shopify app's
- * showcase-queries.server.ts).
+ * Search Examples (the typing list), asked of Quissly in the background (as the Quissly Shopify
+ * app does).
  *
  * @package Quissly_For_WooCommerce
  */

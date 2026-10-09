@@ -124,12 +124,12 @@ class Quissly_Overlay {
 		}
 		if ( 'manual' === Quissly_Settings::get( 'quissly_overlay_suggestions_mode' ) ) {
 			$text = (string) Quissly_Settings::get( 'quissly_overlay_suggestions_manual' );
-			// A multilingual store: the shopper's language's list (none without one - never
-			// another language's buttons).
+			// A multilingual store: the shopper's language's list; a language without one uses
+			// the main language's (the Shopify app's rule).
 			$current = Quissly_Languages::current_key();
 			if ( Quissly_Languages::is_multilingual() && $current !== Quissly_Languages::main_key() ) {
 				$by   = (array) Quissly_Settings::get( 'quissly_overlay_suggestions_manual_by_language' );
-				$text = (string) ( $by[ $current ] ?? $by[ explode( '-', $current )[0] ] ?? '' );
+				$text = (string) ( $by[ $current ] ?? $by[ explode( '-', $current )[0] ] ?? $text );
 			}
 			$lines = preg_split( '/\R/u', $text );
 

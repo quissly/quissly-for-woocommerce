@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Everything Quissly's store billing API offers a store after Setup (STORE_BILLING_API.md),
+ * Everything Quissly's store billing API offers a store after Setup,
  * laid out as the Shopify app's Settings billing column: a current-plan card per product
  * (search, chat) with its status, banners and the plan picker, then Usage and Extra requests;
  * invoices and the card on file on the right. A product with no plan offers the plans to

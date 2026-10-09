@@ -29,7 +29,7 @@ class Quissly_Live_Quick_Client implements Quissly_Quick_Client {
 			return array();
 		}
 
-		// NO page_number/page_size: LIVE-RECONFIRMED 2026-09-16 that /v2beta/quick rejects
+		// NO page_number/page_size: verified against the live API that /v2beta/quick rejects
 		// both as unrecognized fields (422 "Extra inputs are not permitted") - there is
 		// currently no server-side pagination/limit field for this endpoint at all (a `limit`
 		// field was tried too and is equally rejected). $limit is applied client-side below
@@ -59,8 +59,8 @@ class Quissly_Live_Quick_Client implements Quissly_Quick_Client {
 			return array( 'ids' => array(), 'variants' => array() );
 		}
 
-		// qimage uses the plain v2 header signing scheme, same as qsearch (LIVE-RECONFIRMED
-		// 2026-09-16): NO body `timestamp` field. (History: an earlier live pass found the
+		// qimage uses the plain v2 header signing scheme, same as qsearch (verified against the live
+		// API): NO body `timestamp` field. (History: an earlier live pass found the
 		// endpoint REQUIRED a body `timestamp`; the backend has since flipped to REJECTING one
 		// - 422 "Extra inputs are not permitted" - so that field is no longer sent. Re-check
 		// live before assuming either shape is permanent; this endpoint has changed once already.)
@@ -80,7 +80,7 @@ class Quissly_Live_Quick_Client implements Quissly_Quick_Client {
 			return array( 'ids' => array(), 'variants' => array() );
 		}
 
-		// top_variant_id is returned per document here too (LIVE-CONFIRMED 2026-09-17: a
+		// top_variant_id is returned per document here too (verified against the live API: a
 		// variation's own photo came back as its parent + that variation).
 		$parsed = Quissly_Response_Parser::parse_search( $res['body'] );
 
@@ -115,7 +115,7 @@ class Quissly_Live_Quick_Client implements Quissly_Quick_Client {
 
 		return array(
 			'ids'           => $parsed['ids'],
-			'variants'      => $parsed['variants'], // LIVE-CONFIRMED 2026-09-17, same as text qsearch.
+			'variants'      => $parsed['variants'], // verified against the live API, same as text qsearch.
 			'transcription' => isset( $res['body']['query'] ) ? (string) $res['body']['query'] : '', // echoed transcription
 		);
 	}

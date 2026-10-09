@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * A port of the Shopify app's `app/lib/description-draft.ts` (composeDescriptionDraft): the same
+ * A port of the Quissly Shopify app's description draft (composeDescriptionDraft): the same
  * sentences in the same order, locked by its own test cases (tests/unit/DescriptionDraftTest.php),
  * and the same logic as quissly-for-magento's Model/Connect/DescriptionDraft. The description
  * becomes the Quissly organization's; merchants facing an empty box write thin ones, so Setup
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Quissly_Description_Draft
 {
-    /** The middleware rejects organization descriptions over 500 characters. */
+    /** Quissly rejects organization descriptions over 500 characters. */
     public const MAX_LENGTH = 500;
 
     /** The draft stays well under the limit, leaving the merchant room to add. */

@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,18 +12,25 @@ Replace native WooCommerce search with Quissly AI product discovery: semantic se
 
 == Description ==
 
-Quissly for WooCommerce connects a WooCommerce store to the Quissly AI product-discovery
-API. It keeps the catalog synced to Quissly, replaces native WooCommerce search with
-relevance-ranked Quissly results rendered through the active theme, adds a Quick
-autocomplete dropdown with voice and image search, and injects the hosted QChat widget.
+Quissly for WooCommerce connects your store to Quissly's AI product search. It keeps your
+catalog in sync with Quissly, answers your store's searches with Quissly's results (shown in
+your own theme), and can add a Quick results dropdown with voice and image search and the
+QChat shopping assistant.
 
-The plugin is a thin proxy: Quissly returns product IDs and the plugin hydrates prices,
-stock, and add-to-cart natively from WooCommerce. It does not touch cart, checkout, or
-theme layout beyond the search query.
+Quissly only decides which products a search shows and in what order. Prices, stock, the
+cart and checkout stay WooCommerce's own, and your theme's layout is not changed.
 
-The search overlay also types example searches into its empty bar ("search bar
-suggestions") so shoppers see what they can ask. Five are generated from your catalog
-after the first sync; edit them (up to 20) in the plugin's Configuration page.
+When a shopper opens search, Quissly can also help them start:
+
+* Search Examples - example searches typed letter by letter into the empty search bar.
+* Search Suggestions - buttons under the empty search bar; a click searches for it.
+
+Quissly creates both from your catalog after the first sync, and you can edit them in
+Quissly > Configuration.
+
+Stores in several languages (WPML or Polylang) are supported: every language's pages show
+that language's products, and each language can have its own Search Examples and Search
+Suggestions.
 
 == Privacy ==
 
@@ -40,9 +47,8 @@ visitor's first search.
 Shopping activity for Quissly's analytics (Quissly > Configuration, on by default): product
 page views, searches, adds to cart (and to the wishlist with YITH WooCommerce Wishlist) and
 paid orders - an order counts once it reaches Processing or Completed - are sent to Quissly
-for the analytics in the Quissly Admin Panel, as the Quissly Shopify app does. Product ids,
-quantities, prices and order totals with the visitor id above; never a name, email address,
-postal address or IP address. Nothing is recorded for a visitor who has not consented to
+for the analytics in the Quissly Admin Panel: product ids, quantities, prices and order
+totals with the visitor id above - never a name, email address, postal address or IP address. Nothing is recorded for a visitor who has not consented to
 statistics cookies (WP Consent API).
 
 A Quissly account (managed at admin.quissly.com) is required. The plugin is free and
@@ -54,13 +60,36 @@ GPL-licensed; Quissly the service is the paid product.
 2. Download `quissly-for-woocommerce.zip` from the [latest release](https://github.com/quissly/quissly-for-woocommerce/releases/latest) and install it under Plugins > Add New Plugin > Upload Plugin, then activate it.
 3. Open Quissly in the admin menu. Quissly Setup takes three steps: connect (one click, with your email), choose a plan, and go live once your catalog has synced - the sync starts by itself.
 
+== Settings ==
+
+Quissly > Configuration has five sections; click a title to open it.
+
+* Features - switch search, the search overlay, Quick results, voice and image search, QChat and shopping analytics on or off.
+* Search Examples - the example searches typed into the empty search bar: switch them on or off and edit the list. "Reset to generated" brings back the list Quissly made from your catalog.
+* Search Suggestions - the buttons under the empty search bar: Automatic (Quissly picks them from your catalog) or Manual (you type up to 10).
+* Catalog data - which product attributes are sent to Quissly, so a search can match them.
+* Advanced - your theme's search box (only if Quissly does not find it by itself), whether your settings are kept when the plugin is deleted, and how often the plugin checks for updates.
+
+On a store with several languages, Search Examples and Search Suggestions have a Language select: each language can have its own list, and a language without one uses your main language's.
+
+Click Save Changes at the bottom of the page to keep your changes.
+
 == Updates ==
 
-The plugin updates itself. Once a day it checks the [plugin's GitHub releases](https://github.com/quissly/quissly-for-woocommerce/releases) for a newer version, and WordPress installs it in the background with its own updater - the same one that updates plugins from WordPress.org, including putting the previous version back if the new one fails to load. Every release is signed by Quissly, and the plugin installs only a download whose signature checks out - a zip without it is refused, whoever published it. Automatic updates are always on for this plugin, and "Update now" on the Plugins page works too. Settings, credentials and sync state are kept.
+The plugin updates itself. Every 30 minutes it checks the [plugin's GitHub releases](https://github.com/quissly/quissly-for-woocommerce/releases) for a newer version, and WordPress installs it in the background with its own updater - the same one that updates plugins from WordPress.org, including putting the previous version back if the new one fails to load. Every release is signed by Quissly, and the plugin installs only a download whose signature checks out - a zip without it is refused, whoever published it. Your settings, connection and catalog sync are kept.
+
+You can change how often it checks under Quissly > Configuration > Advanced > Update check frequency: from every 30 minutes to once a day, or Never - then nothing is installed automatically and a new version waits on the Plugins page for "Update now". WordPress only runs its background tasks when someone visits the site, so a quiet site checks on its next visit.
 
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.7 =
+* Changed: Configuration has a section each for "Search Examples" (the example searches typed into the search bar) and "Search Suggestions" (the buttons under it), named as in Quissly's other apps.
+* Changed: Search Examples are listed one per row with a Remove button; manual Search Suggestions get a field each, and the next field appears when you fill the last one.
+* Changed: Search Suggestions are chosen with an Automatic / Manual dropdown, and "Show typing suggestions" is a checkbox.
+* Changed: Configuration's dropdowns look and open like WooCommerce's own.
+* Changed: on a store with several languages, a language without its own Search Examples or Search Suggestions uses your main language's.
 
 = 1.0.6 =
 * New: choose how often Quissly checks for a new version, in Configuration > Advanced - every 30 minutes (the default) to once a day, every 5 minutes for testing, or never (then a new version waits on the Plugins page for "Update now").
@@ -98,9 +127,8 @@ WordPress installs updates in the background only where it can write the plugin'
 * Changed: runs on PHP 7.4 without relying on WordPress's PHP 8 compatibility functions.
 
 = 1.0.0 =
-* First real release. Catalog sync, AI-ranked search, Quick autocomplete with voice
-  and image search, the QChat assistant, and a one-click Quissly Setup + admin dashboard —
-  all built on top of the 0.0.1 scaffold.
+* First release: catalog sync, AI-ranked search, Quick autocomplete with voice and image
+  search, the QChat assistant, and a one-click Quissly Setup with an admin dashboard.
 * Fixed: a product title could execute a script in the Quick autocomplete dropdown
   (stored XSS).
 * Fixed: an unpublished, pending, or private product could still be pushed to and
@@ -130,4 +158,4 @@ WordPress installs updates in the background only where it can write the plugin'
   that field in Quissly; such metadata keys are now sent as `attr_<name>`.
 
 = 0.0.1 =
-* Initial scaffold.
+* Preview.

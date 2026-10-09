@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * per-variant data (the concrete attribute values color/size/logo and the sku) goes in the
  * variant's OWN metadata.
  *
- * REQUIRED-vs-SPARSE (LIVE-CONFIRMED): the /add endpoint validates each variant as a full
+ * REQUIRED-vs-SPARSE (verified against the live API): the /add endpoint validates each variant as a full
  * ProductItem and does NOT inherit omitted fields from the parent (a sparse variant 422'd).
  * So the REQUIRED fields — title, description, category, images, original_price — are
  * populated on EVERY variant, copied from the parent when the variant has no own value. The
@@ -226,7 +226,7 @@ class Quissly_Product_Mapper {
 
 		// Parent identity fields, COPIED onto each variant below. The /add endpoint validates
 		// every variant as a full ProductItem and does NOT inherit these from the parent
-		// (LIVE-CONFIRMED 422), so they are required per variant; /update is lenient but the
+		// (the live API answers 422), so they are required per variant; /update is lenient but the
 		// same full shape satisfies both. Genuinely per-variant fields still override.
 		$parent_title       = isset( $product['title'] ) ? (string) $product['title'] : '';
 		$parent_description = self::description( $product );
@@ -295,7 +295,7 @@ class Quissly_Product_Mapper {
 		// names, no `variants` of its own). The REQUIRED ProductItem fields (title, description,
 		// category, images, original_price) are populated on every variant — copied from the
 		// parent when the variant has no own value — because /add does NOT inherit them
-		// (LIVE-CONFIRMED 422). The OPTIONAL fields (discounted_price, in_stock, sku) stay
+		// (the live API answers 422). The OPTIONAL fields (discounted_price, in_stock, sku) stay
 		// SPARSE: emitted only when they differ from the parent.
 		$variants = array();
 		foreach ( $rows as $row ) {

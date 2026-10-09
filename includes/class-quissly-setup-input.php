@@ -12,8 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * The workspace name: letters, numbers, spaces and hyphens (the Shopify app's
  * SLUG_SOURCE_PATTERN), suggested from the store name as its suggestOrganizationName() does.
- * The email: what Quissly's backend accepts (its pydantic EmailStr, mirrored by the Shopify app's
- * email-validation.ts), so a bad address is caught here rather than when the account is created.
+ * The email: what Quissly accepts for an account email (the Shopify app checks the same), so a
+ * bad address is caught here rather than when the account is created.
  * assets/js/quissly-setup.js runs the same checks as the merchant types. Pure; the same rules as
  * quissly-for-magento's Model/Connect/SetupInput, kept in its code style so the copies diff cleanly.
  */

@@ -47,9 +47,8 @@ class Quissly_Live_Service_Directory_Client implements Quissly_Service_Directory
 
 	/**
 	 * The qsearch service's quissly_service_link: the namespace of Quissly's own product
-	 * ids, uuid5( link, "<product id>" ) - the ids the chat widget uses (LIVE-CONFIRMED
-	 * 2026-09-24 on the CS-Cart test store: uuid5( link, "247" ) was exactly the
-	 * chat's id for product 247).
+	 * ids, uuid5( link, "<product id>" ) - the ids the chat widget uses (verified against the
+	 * live chat: uuid5( link, "247" ) is the chat's id for product 247).
 	 *
 	 * @param string $project_id Quissly project id.
 	 * @param string $email      Account email.

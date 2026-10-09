@@ -60,7 +60,7 @@ class Quissly_Mock_Search_Client implements Quissly_Search_Client {
 
 		$documents = array();
 		foreach ( array_values( $slice ) as $i => $id ) {
-			// LIVE-CONFIRMED shape (FINAL): the WooCommerce post id is the top-level id
+			// The live API's shape: the WooCommerce post id is the top-level id
 			// (integer), with include_metadata:false. (The interim UUID/metadata shape was
 			// reverted by the backend.)
 			$documents[] = array(
