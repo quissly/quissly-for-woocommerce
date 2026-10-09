@@ -72,6 +72,8 @@ class Quissly_Settings {
 			// only way, besides QUISSLY_ENV, to select demo/test (no WP type maps to those).
 			'quissly_environment'             => array( 'default' => '', 'type' => 'text' ),
 			'quissly_preserve_on_uninstall'   => array( 'default' => false, 'type' => 'bool' ),
+			// How often the plugin checks for a new release (Quissly_Updater::interval()).
+			'quissly_update_check_every'      => array( 'default' => 1800, 'type' => 'update_every' ),
 		);
 	}
 
@@ -163,6 +165,8 @@ class Quissly_Settings {
 				return self::sanitize_lines( $raw );
 			case 'lines_by_language':
 				return self::sanitize_lines_by_language( $raw );
+			case 'update_every':
+				return Quissly_Updater::sanitize_interval( $raw );
 			case 'text':
 			default:
 				return sanitize_text_field( (string) $raw );

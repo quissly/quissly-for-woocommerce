@@ -2,13 +2,13 @@
 /**
  * Automatic updates from the plugin's public GitHub repository.
  *
- * Once a day the plugin asks GitHub for the repository's latest release - and every HINT_EVERY
- * it reads just the version line of the repository's main file (raw.githubusercontent.com,
- * GitHub's CDN: no API rate limit), so a new release is noticed within minutes instead of a day
- * (hint()). A newer version is
- * handed to WordPress's own update system (the `Update URI` header in the main plugin file
- * routes this plugin's update check to the `update_plugins_github.com` filter instead of
- * WordPress.org), and auto-updates are always on for this plugin - so WordPress downloads,
+ * Every interval() - the merchant's "Update check frequency" in Configuration, 5 minutes (for
+ * testing) to a day, 30 minutes by default, or never - the plugin reads just the version line of the repository's main file
+ * (raw.githubusercontent.com, GitHub's CDN: no API rate limit; hint()), and asks GitHub for the
+ * latest release when it names a newer one, or when the answer kept from the last ask is older
+ * than interval(). A newer version is handed to WordPress's own update system (the `Update URI`
+ * header in the main plugin file routes this plugin's update check to the
+ * `update_plugins_github.com` filter instead of WordPress.org), and auto-updates are always on for this plugin - so WordPress downloads,
  * installs and, on failure, rolls back the update itself, like any other plugin's.
  *
  * Every release zip is signed (Ed25519) by the release workflow with Quissly's release key;
@@ -43,8 +43,14 @@ final class Quissly_Updater {
 	/** Site transient holding the last answer from GitHub. */
 	const CACHE = 'quissly_update_release';
 
-	/** How long an answer is kept: the check runs once a day. */
-	const CHECK_EVERY = DAY_IN_SECONDS;
+	/** The merchant's "Update check frequency" (seconds; FREQUENCIES): how often both checks run. */
+	const FREQUENCY_OPTION = 'quissly_update_check_every';
+
+	/** "Never": no checks of ours and no automatic install - the update is installed by hand. */
+	const NEVER = 0;
+
+	/** The frequencies offered: 5 minutes (for testing), 30 minutes (the default) to a day, never. */
+	const FREQUENCIES = array( 300, 1800, 3600, 21600, 43200, 86400, self::NEVER );
 
 	/** A failed check is tried again sooner. */
 	const RETRY_AFTER = HOUR_IN_SECONDS;
@@ -58,7 +64,7 @@ final class Quissly_Updater {
 	 */
 	const HINT_URL = 'https://raw.githubusercontent.com/quissly/quissly-for-woocommerce/main/quissly-for-woocommerce.php';
 
-	/** How often the hint is read: every 30 minutes. */
+	/** How often the hint is read, unless the merchant chose otherwise: every 30 minutes. */
 	const HINT_EVERY = 1800;
 
 	/** The WP-Cron event that reads it. */
@@ -72,9 +78,57 @@ final class Quissly_Updater {
 		add_filter( 'auto_update_plugin', array( __CLASS__, 'auto_update' ), 10, 2 );
 		add_filter( 'plugins_api', array( __CLASS__, 'details' ), 10, 3 );
 		add_filter( 'upgrader_pre_download', array( __CLASS__, 'download' ), 10, 3 );
-		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- HINT_EVERY, 30 minutes.
+		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- interval(), 5 minutes at the least (for testing).
 		add_action( self::HINT_HOOK, array( __CLASS__, 'hint' ) );
 		add_action( 'init', array( __CLASS__, 'schedule_hint' ) );
+		// A new frequency takes effect at once: the hint is scheduled again, the answer kept
+		// under the old one is dropped.
+		add_action( 'update_option_' . self::FREQUENCY_OPTION, array( __CLASS__, 'frequency_changed' ) );
+		add_action( 'add_option_' . self::FREQUENCY_OPTION, array( __CLASS__, 'frequency_changed' ) );
+	}
+
+	/**
+	 * How often both checks run, in seconds: the merchant's choice (one of FREQUENCIES; NEVER =
+	 * not at all), else every 30 minutes.
+	 *
+	 * @return int
+	 */
+	public static function interval() {
+		return self::sanitize_interval( get_option( self::FREQUENCY_OPTION, self::HINT_EVERY ) );
+	}
+
+	/**
+	 * A frequency as one of FREQUENCIES; anything else (nothing chosen included) is the
+	 * default. Pure.
+	 *
+	 * @param mixed $value Seconds.
+	 * @return int
+	 */
+	public static function sanitize_interval( $value ) {
+		if ( ! is_numeric( $value ) ) {
+			return self::HINT_EVERY;
+		}
+
+		return in_array( (int) $value, self::FREQUENCIES, true ) ? (int) $value : self::HINT_EVERY;
+	}
+
+	/**
+	 * Whether the merchant chose "Never".
+	 *
+	 * @return bool
+	 */
+	public static function is_never() {
+		return self::NEVER === self::interval();
+	}
+
+	/**
+	 * The frequency was saved: schedule the hint again at it, drop the answer kept under the
+	 * old one.
+	 */
+	public static function frequency_changed() {
+		self::unschedule_hint();
+		delete_site_transient( self::CACHE );
+		self::schedule_hint();
 	}
 
 	/**
@@ -85,7 +139,7 @@ final class Quissly_Updater {
 	 */
 	public static function cron_schedules( $schedules ) {
 		$schedules[ self::HINT_HOOK ] = array(
-			'interval' => self::HINT_EVERY,
+			'interval' => self::is_never() ? self::HINT_EVERY : self::interval(),
 			'display'  => 'Quissly update hint',
 		);
 
@@ -93,11 +147,18 @@ final class Quissly_Updater {
 	}
 
 	/**
-	 * Keep the hint scheduled (WP-Cron; a store without visitors runs it on its next visit).
+	 * Keep the hint scheduled (WP-Cron; a store without visitors runs it on its next visit) -
+	 * unscheduled when the merchant chose "Never".
 	 */
 	public static function schedule_hint() {
+		if ( self::is_never() ) {
+			if ( wp_next_scheduled( self::HINT_HOOK ) ) {
+				self::unschedule_hint();
+			}
+			return;
+		}
 		if ( ! wp_next_scheduled( self::HINT_HOOK ) ) {
-			wp_schedule_event( time() + self::HINT_EVERY, self::HINT_HOOK, self::HINT_HOOK );
+			wp_schedule_event( time() + self::interval(), self::HINT_HOOK, self::HINT_HOOK );
 		}
 	}
 
@@ -121,6 +182,9 @@ final class Quissly_Updater {
 	public static function hint() {
 		if ( self::is_checkout() ) {
 			return 'git_checkout';
+		}
+		if ( self::is_never() ) {
+			return 'never';
 		}
 		$hinted = self::hinted_version();
 		if ( null === $hinted ) {
@@ -284,7 +348,8 @@ final class Quissly_Updater {
 	}
 
 	/**
-	 * `auto_update_plugin`: this plugin always updates itself.
+	 * `auto_update_plugin`: this plugin updates itself - unless the merchant chose "Never", when
+	 * a new version waits on the Plugins page to be installed by hand.
 	 *
 	 * @param bool|null $update Whether to update.
 	 * @param object    $item   The update offer.
@@ -292,7 +357,7 @@ final class Quissly_Updater {
 	 */
 	public static function auto_update( $update, $item ) {
 		if ( is_object( $item ) && isset( $item->plugin ) && QUISSLY_PLUGIN_BASENAME === $item->plugin ) {
-			return true;
+			return ! self::is_never();
 		}
 
 		return $update;
@@ -330,7 +395,7 @@ final class Quissly_Updater {
 	}
 
 	/**
-	 * The latest release, asked of GitHub at most once a day.
+	 * The latest release, asked of GitHub at most once per interval().
 	 *
 	 * @return array{version:string, package:string, signature:string, notes:string}|null
 	 */
@@ -354,7 +419,9 @@ final class Quissly_Updater {
 		if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
 			$release = self::parse_release( json_decode( (string) wp_remote_retrieve_body( $response ), true ), self::package_prefix() );
 		}
-		set_site_transient( self::CACHE, array( 'release' => $release ), null === $release ? self::RETRY_AFTER : self::CHECK_EVERY );
+		// Kept for interval() ("Never": a day, for the Plugins page's own daily check).
+		$keep = self::is_never() ? DAY_IN_SECONDS : self::interval();
+		set_site_transient( self::CACHE, array( 'release' => $release ), null === $release ? min( self::RETRY_AFTER, $keep ) : $keep );
 
 		return $release;
 	}

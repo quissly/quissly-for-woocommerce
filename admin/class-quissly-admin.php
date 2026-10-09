@@ -409,6 +409,23 @@ class Quissly_Admin {
 		$this->text_row( 'quissly_search_selector_desktop', __( 'Search box selector (desktop)', 'quissly-for-woocommerce' ), __( 'Only if Quissly does not find your theme\'s search box on its own: a CSS selector for it on desktop.', 'quissly-for-woocommerce' ) );
 		$this->text_row( 'quissly_search_selector_mobile', __( 'Search box selector (mobile)', 'quissly-for-woocommerce' ), __( 'The same, for the mobile layout.', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_preserve_on_uninstall', __( 'Preserve configuration on uninstall', 'quissly-for-woocommerce' ), __( 'Keeps your settings and the connection to Quissly when the plugin is deleted, for a reinstall.', 'quissly-for-woocommerce' ) );
+		$every = Quissly_Updater::interval();
+		echo '<tr><th scope="row"><label for="quissly_update_check_every">' . esc_html__( 'Update check frequency', 'quissly-for-woocommerce' ) . '</label></th><td>';
+		echo '<select name="quissly_update_check_every" id="quissly_update_check_every">';
+		$labels = array(
+			300   => __( 'Every 5 minutes (For testing)', 'quissly-for-woocommerce' ),
+			1800  => __( 'Every 30 minutes', 'quissly-for-woocommerce' ),
+			3600  => __( 'Every hour', 'quissly-for-woocommerce' ),
+			21600 => __( 'Every 6 hours', 'quissly-for-woocommerce' ),
+			43200 => __( 'Every 12 hours', 'quissly-for-woocommerce' ),
+			86400 => __( 'Once a day', 'quissly-for-woocommerce' ),
+			0     => __( 'Never', 'quissly-for-woocommerce' ),
+		);
+		foreach ( Quissly_Updater::FREQUENCIES as $seconds ) {
+			echo '<option value="' . esc_attr( (string) $seconds ) . '"' . selected( $every, $seconds, false ) . '>' . esc_html( $labels[ $seconds ] ) . '</option>';
+		}
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'How often Quissly checks for a new version of this plugin. A new version installs itself in the background, so this is at most how long your store waits for it. Never: no automatic updates - a new version shows on the Plugins page, to install with "Update now".', 'quissly-for-woocommerce' ) . '</p></td></tr>';
 		$this->section_close();
 
 		submit_button();
@@ -614,13 +631,13 @@ class Quissly_Admin {
 			$notes   = array();
 			if ( $counts['shown'] > 0 && $counts['hidden'] > 0 ) {
 				/* translators: %d: number of products. */
-				$notes[] = sprintf( __( 'hidden on %d products', 'quissly-for-woocommerce' ), $counts['hidden'] );
+				$notes[] = sprintf( _n( 'hidden on %d product', 'hidden on %d products', $counts['hidden'], 'quissly-for-woocommerce' ), $counts['hidden'] );
 			} elseif ( 0 === $counts['shown'] ) {
 				$notes[] = __( 'hidden on product pages', 'quissly-for-woocommerce' );
 			}
 			if ( $counts['variation'] > 0 ) {
 				/* translators: %d: number of products. */
-				$notes[] = sprintf( __( 'a variation option on %d products - always sent there', 'quissly-for-woocommerce' ), $counts['variation'] );
+				$notes[] = sprintf( _n( 'a variation option on %d product - always sent there', 'a variation option on %d products - always sent there', $counts['variation'], 'quissly-for-woocommerce' ), $counts['variation'] );
 			}
 			echo '<input type="hidden" name="quissly_catalog_offered[]" value="' . esc_attr( $label ) . '" />';
 			echo '<label style="display:block;break-inside:avoid;margin:0 0 6px"><input type="checkbox" name="quissly_catalog_attributes[]" value="' . esc_attr( $label ) . '"' . checked( $checked, true, false ) . ' /> ' . esc_html( $label );
