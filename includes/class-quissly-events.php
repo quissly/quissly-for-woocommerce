@@ -67,12 +67,41 @@ final class Quissly_Events {
 	 * @return bool
 	 */
 	public static function enabled() {
-		if ( ! Quissly_Settings::get( 'quissly_enable_events' ) || '' === (string) Quissly_Env::token() ) {
+		return Quissly_Settings::get( 'quissly_enable_events' ) && self::store_connected();
+	}
+
+	/**
+	 * Whether the store can send to Quissly at all (connected, with its key) - what the store's
+	 * own events need (Quissly_Version_Report), whatever the "Shopping activity" switch says.
+	 *
+	 * @return bool
+	 */
+	public static function store_connected() {
+		if ( '' === (string) Quissly_Env::token() ) {
 			return false;
 		}
 		$keys = new Quissly_Key_Store();
 
 		return $keys->has_stored_key() || $keys->is_dev_override_active();
+	}
+
+	/**
+	 * Record an event about the store itself (no shopper, no user id).
+	 *
+	 * @param string $type     Event type.
+	 * @param array  $metadata Its metadata.
+	 * @return bool Recorded.
+	 */
+	public static function record_store( $type, array $metadata ) {
+		try {
+			if ( ! self::store_connected() ) {
+				return false;
+			}
+
+			return self::queue( Quissly_Event_Body::envelope( $type, $metadata, null, array(), self::shop(), Quissly_Event_Body::SOURCE_STORE, wp_generate_uuid4(), time() ) );
+		} catch ( Throwable $e ) {
+			return false;
+		}
 	}
 
 	/**
@@ -299,11 +328,13 @@ final class Quissly_Events {
 			'retried' => 0,
 		);
 		$now    = time();
-		if ( ! self::enabled() ) {
-			// Switched off (or disconnected): nothing more leaves the store.
+		if ( ! self::store_connected() ) {
+			// Disconnected: nothing more leaves the store.
 			$counts['dropped'] = Quissly_Event_Queue::clear();
 			return $counts;
 		}
+		// "Shopping activity" off: shoppers' events are dropped, the store's own still go.
+		$shoppers = self::enabled();
 		$counts['dropped'] += Quissly_Event_Queue::clear( $now - Quissly_Event_Outcome::MAX_AGE_SECONDS );
 		$counts['dropped'] += Quissly_Event_Queue::trim( self::KEEP );
 
@@ -317,7 +348,7 @@ final class Quissly_Events {
 				if ( microtime( true ) - $started > self::TIME_BUDGET ) {
 					break;
 				}
-				if ( empty( $row['body'] ) ) {
+				if ( empty( $row['body'] ) || ( ! $shoppers && Quissly_Event_Body::SOURCE_STORE !== ( $row['body']['metadata']['source'] ?? '' ) ) ) {
 					$done[] = $row['queue_id'];
 					++$counts['dropped'];
 					continue;

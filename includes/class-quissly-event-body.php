@@ -37,6 +37,9 @@ final class Quissly_Event_Body {
 	/** A paid order - recorded by the store, not the shopper's browser (Shopify: "webhook"). */
 	const SOURCE_ORDER = 'order';
 
+	/** The store reporting on itself (Quissly_Version_Report), not a shopper's action. */
+	const SOURCE_STORE = 'store';
+
 	const MODALITIES = array( 'text', 'voice', 'image' );
 
 	/** The storefront search's own limit. */

@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.10
+Stable tag: 1.0.11
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -85,6 +85,9 @@ You can change how often it checks under Quissly > Configuration > Advanced > Up
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.11 =
+* Added: the plugin tells Quissly which version it runs, the version before it and when it was updated - when the store is connected, after each update and once a day. It sends nothing about shoppers.
 
 = 1.0.10 =
 * Added: Most loved products - pick 8 products and 4 backups in Configuration, shown as cards under the search suggestions when search opens. A product picked for both lists, too few picks, or fewer than 8 in stock hides the block, and Configuration says what to fix.

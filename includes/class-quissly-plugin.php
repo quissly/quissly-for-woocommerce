@@ -105,6 +105,7 @@ final class Quissly_Plugin {
 			'includes/class-quissly-event-outcome.php',
 			'includes/class-quissly-event-queue.php',
 			'includes/class-quissly-events.php',
+			'includes/class-quissly-version-report.php',
 			'admin/class-quissly-settings.php',
 			'admin/class-quissly-wizard.php',
 			'includes/class-quissly-description-draft.php',
@@ -201,6 +202,7 @@ final class Quissly_Plugin {
 		// Shopping activity for Quissly's analytics. Gates internally on its switch + a
 		// connected store; the send action and the wc-ajax endpoint must exist on every request.
 		( new Quissly_Events() )->register();
+		( new Quissly_Version_Report() )->register();
 
 		$use_mock = defined( 'QUISSLY_USE_MOCK_SEARCH' ) && QUISSLY_USE_MOCK_SEARCH;
 		if ( $use_mock ) {
