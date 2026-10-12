@@ -106,6 +106,11 @@ final class Quissly_Version_Report {
 		try {
 			$state  = (array) get_option( self::OPTION, array() );
 			$result = self::track( $state, QUISSLY_VERSION, time() );
+			$moved  = (string) ( $result['state']['previous'] ?? '' );
+			if ( ( $state['version'] ?? '' ) !== QUISSLY_VERSION && '' !== $moved ) {
+				Quissly_Sync_Log::log( sprintf( 'Quissly updated from %s to %s.', $moved, QUISSLY_VERSION ) );
+				delete_option( Quissly_Updater::PROBLEM_OPTION );
+			}
 			$report = $result['report'] && Quissly_Events::store_connected();
 			if ( $report && Quissly_Events::record_store( self::EVENT, self::metadata( $result['state'] ) ) ) {
 				$result['state']['reported_at'] = time();

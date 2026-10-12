@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.11
+Stable tag: 1.0.12
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -85,6 +85,11 @@ You can change how often it checks under Quissly > Configuration > Advanced > Up
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.12 =
+* Added: the sync log (Quissly > Dashboard) says when the plugin was updated, and why an update could not be installed - for example GitHub not answering your server, or automatic updates switched off for the site.
+* Fixed: a server that GitHub limits (common on shared hosting) finds new versions anyway.
+* Changed: the Plugins screen says "Automatic updates on" for Quissly, with a link to where you change it, instead of WordPress's "Enable auto-updates".
 
 = 1.0.11 =
 * Added: the plugin tells Quissly which version it runs, the version before it and when it was updated - when the store is connected, after each update and once a day. It sends nothing about shoppers.

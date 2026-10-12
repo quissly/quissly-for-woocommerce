@@ -404,7 +404,7 @@ class Quissly_Admin {
 		$this->section_close();
 
 		// --- Advanced ------------------------------------------------------------------------
-		$this->section_open( 'advanced', __( 'Advanced', 'quissly-for-woocommerce' ), false );
+		$this->section_open( 'advanced', __( 'Advanced', 'quissly-for-woocommerce' ), false, 'quissly-advanced' );
 		$this->text_row( 'quissly_search_selector_desktop', __( 'Search box selector (desktop)', 'quissly-for-woocommerce' ), __( 'Only if Quissly does not find your theme\'s search box on its own: a CSS selector for it on desktop.', 'quissly-for-woocommerce' ) );
 		$this->text_row( 'quissly_search_selector_mobile', __( 'Search box selector (mobile)', 'quissly-for-woocommerce' ), __( 'The same, for the mobile layout.', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_preserve_on_uninstall', __( 'Preserve configuration on uninstall', 'quissly-for-woocommerce' ), __( 'Keeps your settings and the connection to Quissly when the plugin is deleted, for a reinstall.', 'quissly-for-woocommerce' ) );

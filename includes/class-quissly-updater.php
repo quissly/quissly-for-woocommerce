@@ -54,6 +54,10 @@ final class Quissly_Updater {
 
 	/** A failed check is tried again sooner. */
 	const RETRY_AFTER = HOUR_IN_SECONDS;
+	/** Option: the last update problem written to the sync log, so it is written once a day, not every check. */
+	const PROBLEM_OPTION = 'quissly_update_problem';
+	/** Why the last GitHub request failed ('' = it did not). */
+	private static $github_error = '';
 
 	/** The plugin's slug (its folder), as WordPress's update screens name it. */
 	const SLUG = 'quissly-for-woocommerce';
@@ -76,6 +80,8 @@ final class Quissly_Updater {
 	public static function register() {
 		add_filter( 'update_plugins_github.com', array( __CLASS__, 'offer' ), 10, 3 );
 		add_filter( 'auto_update_plugin', array( __CLASS__, 'auto_update' ), 10, 2 );
+		add_filter( 'plugin_auto_update_setting_html', array( __CLASS__, 'auto_update_setting' ), 10, 2 );
+		add_action( 'automatic_updates_complete', array( __CLASS__, 'installed' ) );
 		add_filter( 'plugins_api', array( __CLASS__, 'details' ), 10, 3 );
 		add_filter( 'upgrader_pre_download', array( __CLASS__, 'download' ), 10, 3 );
 		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- interval(), 5 minutes at the least (for testing).
@@ -188,6 +194,7 @@ final class Quissly_Updater {
 		}
 		$hinted = self::hinted_version();
 		if ( null === $hinted ) {
+			self::problem( 'Quissly could not check GitHub for a new version (' . self::$github_error . ').' );
 			return 'no_hint';
 		}
 		$cached = get_site_transient( self::CACHE );
@@ -199,7 +206,15 @@ final class Quissly_Updater {
 		$release = self::latest();
 		if ( null === $release || version_compare( $release['version'], $hinted, '<' ) ) {
 			delete_site_transient( self::CACHE );
+			// A release still being built (a minute or two after the push) is not a problem; GitHub not answering is.
+			if ( '' !== self::$github_error ) {
+				self::problem( 'Quissly ' . $hinted . ' is out, but GitHub did not answer the update check (' . self::$github_error . ').' );
+			}
 			return 'release_not_ready';
+		}
+		$blocker = self::blocker();
+		if ( '' !== $blocker ) {
+			self::problem( 'Quissly ' . $release['version'] . ' is out, but WordPress cannot install it by itself: ' . $blocker . '. Install it from Dashboard > Updates.' );
 		}
 		// WordPress's own update data, then its background installer: the normal path, now.
 		delete_site_transient( 'update_plugins' );
@@ -251,7 +266,8 @@ final class Quissly_Updater {
 				),
 			)
 		);
-		if ( is_wp_error( $response ) || ! in_array( (int) wp_remote_retrieve_response_code( $response ), array( 200, 206 ), true ) ) {
+		self::$github_error = self::request_error( $response, array( 200, 206 ) );
+		if ( '' !== self::$github_error ) {
 			return null;
 		}
 
@@ -364,6 +380,133 @@ final class Quissly_Updater {
 	}
 
 	/**
+	 * Why a request to GitHub failed, '' when it did not.
+	 *
+	 * @param array|WP_Error $response wp_remote_get()'s answer.
+	 * @param int[]          $ok       The statuses that count as an answer.
+	 * @return string
+	 */
+	private static function request_error( $response, array $ok ) {
+		if ( is_wp_error( $response ) ) {
+			return 'no answer: ' . $response->get_error_message();
+		}
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( in_array( $status, $ok, true ) ) {
+			return '';
+		}
+		// GitHub answers 403/429 to a server that asked too often - 60 an hour per IP address, shared by every site on it.
+		return in_array( $status, array( 403, 429 ), true ) ? 'HTTP ' . $status . ', GitHub\'s limit for this server\'s IP address' : 'HTTP ' . $status;
+	}
+
+	/**
+	 * What stops WordPress installing an update in the background on this site, '' when nothing
+	 * does - the checks WordPress's own automatic updater makes before it installs anything.
+	 *
+	 * @return string
+	 */
+	public static function blocker() {
+		if ( ! wp_is_file_mod_allowed( 'automatic_updater' ) ) {
+			return 'file changes are switched off for this site (DISALLOW_FILE_MODS)';
+		}
+		if ( defined( 'AUTOMATIC_UPDATER_DISABLED' ) && AUTOMATIC_UPDATER_DISABLED ) {
+			return 'automatic updates are switched off for this site (AUTOMATIC_UPDATER_DISABLED)';
+		}
+		if ( apply_filters( 'automatic_updater_disabled', false ) ) {
+			return 'automatic updates are switched off by another plugin or the theme';
+		}
+		if ( ! function_exists( 'get_filesystem_method' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+		if ( 'direct' !== get_filesystem_method( array(), WP_PLUGIN_DIR ) ) {
+			return 'it cannot write the plugin\'s files itself and would need FTP details';
+		}
+		if ( ! class_exists( 'WP_Automatic_Updater' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+			require_once ABSPATH . 'wp-admin/includes/class-wp-automatic-updater.php';
+		}
+		if ( ( new WP_Automatic_Updater() )->is_vcs_checkout( WP_PLUGIN_DIR ) ) {
+			return 'the site is under version control (git or svn)';
+		}
+
+		return '';
+	}
+
+	/**
+	 * `automatic_updates_complete`: WordPress's background installer finished; a failed install
+	 * of this plugin goes to the sync log with WordPress's own reason. (A successful one is
+	 * logged by Quissly_Version_Report once the new version runs.)
+	 *
+	 * @param array $results WordPress's results, per type.
+	 */
+	public static function installed( $results ) {
+		foreach ( (array) ( $results['plugin'] ?? array() ) as $result ) {
+			if ( ! is_object( $result ) || ( $result->item->plugin ?? '' ) !== QUISSLY_PLUGIN_BASENAME || true === $result->result ) {
+				continue;
+			}
+			$why = is_wp_error( $result->result ) ? $result->result->get_error_message() : implode( ' ', array_map( 'strval', (array) ( $result->messages ?? array() ) ) );
+			self::problem( 'WordPress could not install Quissly ' . ( $result->item->new_version ?? '' ) . ( '' !== trim( $why ) ? ': ' . trim( $why ) : '.' ) );
+		}
+	}
+
+	/**
+	 * Write an update problem to the sync log - the same one at most once a day.
+	 *
+	 * @param string $message What went wrong.
+	 */
+	private static function problem( $message ) {
+		$last = get_option( self::PROBLEM_OPTION, array() );
+		if ( ! self::problem_due( is_array( $last ) ? $last : array(), $message, time() ) ) {
+			return;
+		}
+		Quissly_Sync_Log::log( $message );
+		update_option( self::PROBLEM_OPTION, array( 'message' => $message, 'at' => time() ), false );
+	}
+
+	/**
+	 * Whether a problem is to be logged: a new one at once, the same one again after a day. Pure.
+	 *
+	 * @param array  $last    {message, at} of the last one logged ([] = none).
+	 * @param string $message This one.
+	 * @param int    $now     Now.
+	 * @return bool
+	 */
+	public static function problem_due( array $last, $message, $now ) {
+		return ( $last['message'] ?? '' ) !== $message || (int) $now - (int) ( $last['at'] ?? 0 ) >= DAY_IN_SECONDS;
+	}
+
+	/**
+	 * `plugin_auto_update_setting_html`: the Plugins screen's "Automatic updates" column for this
+	 * plugin. WordPress draws its own toggle there, read from its per-plugin list - which never
+	 * names this plugin, so it offered "Enable auto-updates" although auto_update() installs every
+	 * release. It says what really happens instead, and where to change it.
+	 *
+	 * @param string $html        WordPress's toggle.
+	 * @param string $plugin_file The row's plugin.
+	 * @return string
+	 */
+	public static function auto_update_setting( $html, $plugin_file ) {
+		if ( QUISSLY_PLUGIN_BASENAME !== $plugin_file ) {
+			return $html;
+		}
+
+		return esc_html( self::setting_label( self::is_never() ) ) . '<br><a href="'
+			. esc_url( admin_url( 'admin.php?page=quissly-settings#quissly-advanced' ) ) . '">'
+			. esc_html__( 'Change in Quissly > Configuration', 'quissly-for-woocommerce' ) . '</a>';
+	}
+
+	/**
+	 * What the Plugins screen says about this plugin's automatic updates. Pure.
+	 *
+	 * @param bool $never The merchant chose "Never".
+	 * @return string
+	 */
+	public static function setting_label( $never ) {
+		return $never
+			? __( 'Automatic updates off', 'quissly-for-woocommerce' )
+			: __( 'Automatic updates on', 'quissly-for-woocommerce' );
+	}
+
+	/**
 	 * `plugins_api`: the "View version details" window for this plugin, from the release.
 	 *
 	 * @param false|object|array $result What an earlier filter returned.
@@ -415,15 +558,51 @@ final class Quissly_Updater {
 				),
 			)
 		);
-		$release  = null;
-		if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+		$release            = null;
+		self::$github_error = self::request_error( $response, array( 200 ) );
+		if ( '' === self::$github_error ) {
 			$release = self::parse_release( json_decode( (string) wp_remote_retrieve_body( $response ), true ), self::package_prefix() );
+		} elseif ( ! defined( 'QUISSLY_UPDATE_URL' ) ) {
+			// GitHub's API refused this server (60 requests an hour per IP address, shared by
+			// every site on a shared host) or did not answer: the release's files are at known
+			// addresses, named after the version GitHub's CDN shows - no API, no limit. The
+			// signature is checked on download (download()) as for any release.
+			$api_error = self::$github_error;
+			$hinted    = self::hinted_version();
+			if ( null !== $hinted ) {
+				$release = self::release_for( $hinted, self::package_prefix() );
+				// Published yet? (The workflow takes a minute or two after the push.)
+				$head = wp_remote_head( $release['signature'], array( 'timeout' => 10 ) );
+				if ( is_wp_error( $head ) || ! in_array( (int) wp_remote_retrieve_response_code( $head ), array( 200, 301, 302 ), true ) ) {
+					$release = null;
+				}
+			}
+			self::$github_error = $api_error;
 		}
 		// Kept for interval() ("Never": a day, for the Plugins page's own daily check).
 		$keep = self::is_never() ? DAY_IN_SECONDS : self::interval();
 		set_site_transient( self::CACHE, array( 'release' => $release ), null === $release ? min( self::RETRY_AFTER, $keep ) : $keep );
 
 		return $release;
+	}
+
+	/**
+	 * A release named by its version alone, at the addresses the release workflow publishes
+	 * it to (`v<version>/` + ASSET and its `.sig`). Pure.
+	 *
+	 * @param string $version        The version.
+	 * @param string $package_prefix The releases' download address.
+	 * @return array{version:string, package:string, signature:string, notes:string}
+	 */
+	public static function release_for( $version, $package_prefix ) {
+		$package = $package_prefix . 'v' . $version . '/' . self::ASSET;
+
+		return array(
+			'version'   => (string) $version,
+			'package'   => $package,
+			'signature' => $package . '.sig',
+			'notes'     => '',
+		);
 	}
 
 	/**
