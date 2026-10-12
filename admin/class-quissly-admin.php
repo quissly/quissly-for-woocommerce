@@ -69,6 +69,12 @@ class Quissly_Admin {
 			$select_woo = wp_script_is( 'selectWoo', 'registered' ) && wp_style_is( 'woocommerce_admin_styles', 'registered' );
 			wp_enqueue_style( 'quissly-config', QUISSLY_PLUGIN_URL . 'assets/css/quissly-config.css', $select_woo ? array( 'woocommerce_admin_styles' ) : array(), QUISSLY_VERSION );
 			wp_enqueue_script( 'quissly-config', QUISSLY_PLUGIN_URL . 'assets/js/quissly-config.js', $select_woo ? array( 'jquery', 'selectWoo' ) : array(), QUISSLY_VERSION, true );
+			// Most loved's product pickers: WooCommerce's own product search, its picks dragged
+			// into order (WooCommerce sorts them with jQuery UI's sortable, which it does not load).
+			if ( wp_script_is( 'wc-enhanced-select', 'registered' ) ) {
+				wp_enqueue_script( 'jquery-ui-sortable' );
+				wp_enqueue_script( 'wc-enhanced-select' );
+			}
 			return;
 		}
 		if ( 'toplevel_page_' . self::MENU_SLUG !== $hook ) {
@@ -387,6 +393,11 @@ class Quissly_Admin {
 		$this->render_suggestion_buttons();
 		$this->section_close();
 
+		// --- Most Loved Products: the merchant's picks under the suggestions (the Shopify app's) --
+		$this->section_open( 'most-loved', __( 'Most Loved Products', 'quissly-for-woocommerce' ), false, 'quissly-most-loved' );
+		$this->render_most_loved();
+		$this->section_close();
+
 		// --- Catalog data --------------------------------------------------------------------
 		$this->section_open( 'catalog-data', __( 'Catalog data', 'quissly-for-woocommerce' ), false, 'quissly-catalog-data' );
 		$this->render_catalog_data();
@@ -588,6 +599,84 @@ class Quissly_Admin {
 			'fields'
 		);
 		echo '</div></td></tr>';
+	}
+
+	/**
+	 * Configuration's "Most Loved Products" section (the Shopify app's): on or off, 8 products
+	 * to show and 4 backups (WooCommerce's own product search), and what still needs fixing.
+	 */
+	private function render_most_loved() {
+		echo '<tr><td colspan="2" style="padding-left:0"><p class="description" style="max-width:760px;margin:0">' . esc_html__( 'Products you pick, shown under the search suggestions when search opens. Pick 8 to show and 4 backups: when a shown product is out of stock, the first available backup takes its place. Shoppers see nothing until all 12 are picked and 8 of them are in stock.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
+		$this->toggle_row( 'quissly_most_loved', __( 'Most loved products', 'quissly-for-woocommerce' ), __( 'Off by default.', 'quissly-for-woocommerce' ) );
+		echo '<tr hidden><td colspan="2"><input type="hidden" name="quissly_most_loved_present" value="1" /></td></tr>';
+		$picks = Quissly_Most_Loved::picks();
+		$this->product_picker( 'quissly_most_loved_shown', __( 'Shown products (8)', 'quissly-for-woocommerce' ), $picks['shown'], Quissly_Most_Loved::SHOWN, __( 'Pick exactly 8. Shoppers see them in this order.', 'quissly-for-woocommerce' ) );
+		$this->product_picker( 'quissly_most_loved_backups', __( 'Backup products (4)', 'quissly-for-woocommerce' ), $picks['backups'], Quissly_Most_Loved::BACKUPS, __( 'Pick exactly 4, none of them already in Shown products. When a shown product is out of stock, the first available backup takes its place.', 'quissly-for-woocommerce' ) );
+
+		$status = Quissly_Most_Loved::status();
+		if ( null === $status ) {
+			return;
+		}
+		echo '<tr><td colspan="2" style="padding-left:0"><div class="notice notice-warning inline q-most-loved-status"><p><strong>' . esc_html__( 'Most loved products need attention', 'quissly-for-woocommerce' ) . '</strong></p>';
+		if ( $status['hidden'] ) {
+			echo '<p>' . esc_html__( 'Shoppers don\'t see Most loved in search until 8 + 4 different products are picked and 8 of them are in stock.', 'quissly-for-woocommerce' ) . '</p>';
+		}
+		if ( ! empty( $status['duplicates'] ) ) {
+			echo '<p>' . esc_html__( 'These products are in both Shown and Backup products. Keep each in one list only:', 'quissly-for-woocommerce' ) . '</p>';
+			echo '<ul style="list-style:disc;margin-left:20px">';
+			foreach ( $status['duplicates'] as $title ) {
+				echo '<li>' . esc_html( $title ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		$items = array();
+		if ( $status['missing_shown'] > 0 ) {
+			/* translators: %d: how many products. */
+			$items[] = sprintf( _n( 'Pick %d more product to show.', 'Pick %d more products to show.', $status['missing_shown'], 'quissly-for-woocommerce' ), $status['missing_shown'] );
+		}
+		if ( $status['missing_backups'] > 0 ) {
+			/* translators: %d: how many products. */
+			$items[] = sprintf( _n( 'Pick %d more backup.', 'Pick %d more backups.', $status['missing_backups'], 'quissly-for-woocommerce' ), $status['missing_backups'] );
+		}
+		$reasons = array(
+			'out_of_stock'  => __( 'out of stock', 'quissly-for-woocommerce' ),
+			'not_published' => __( 'not published', 'quissly-for-woocommerce' ),
+			'deleted'       => __( 'deleted', 'quissly-for-woocommerce' ),
+		);
+		foreach ( $status['problems'] as $problem ) {
+			/* translators: 1: a product's name, 2: why it can't be shown. */
+			$line    = sprintf( __( '%1$s: %2$s', 'quissly-for-woocommerce' ), $problem['title'], $reasons[ $problem['reason'] ] ?? $problem['reason'] );
+			$items[] = $problem['backup'] ? sprintf( __( '%s (backup)', 'quissly-for-woocommerce' ), $line ) : $line; // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment -- a product line.
+		}
+		if ( $items ) {
+			echo '<ul style="list-style:disc;margin-left:20px">';
+			foreach ( $items as $item ) {
+				echo '<li>' . esc_html( $item ) . '</li>';
+			}
+			echo '</ul>';
+		}
+		echo '</div></td></tr>';
+	}
+
+	/**
+	 * A row with WooCommerce's own product search (the `wc-product-search` select its product
+	 * screens use, products without their variations), the picks in order.
+	 *
+	 * @param string $name  Field name (posted as name[]).
+	 * @param string $label Label.
+	 * @param int[]  $ids   Picked product ids, in order.
+	 * @param int    $max   At most this many.
+	 * @param string $help  Description.
+	 */
+	private function product_picker( $name, $label, array $ids, $max, $help ) {
+		echo '<tr><th scope="row"><label for="' . esc_attr( $name ) . '">' . esc_html( $label ) . '</label></th><td>';
+		echo '<select class="wc-product-search" multiple="multiple" style="width:100%;max-width:520px" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '[]" data-placeholder="' . esc_attr__( 'Search for a product&hellip;', 'quissly-for-woocommerce' ) . '" data-action="woocommerce_json_search_products" data-sortable="true" data-maximum-selection-length="' . esc_attr( (string) (int) $max ) . '">';
+		foreach ( $ids as $id ) {
+			$product = wc_get_product( $id );
+			$title   = $product ? wp_strip_all_tags( $product->get_formatted_name() ) : sprintf( __( 'Product #%d', 'quissly-for-woocommerce' ), $id ); // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment -- a product id.
+			echo '<option value="' . esc_attr( (string) $id ) . '" selected="selected">' . esc_html( $title ) . '</option>';
+		}
+		echo '</select><p class="description">' . esc_html( $help ) . '</p></td></tr>';
 	}
 
 	/**
@@ -897,6 +986,14 @@ class Quissly_Admin {
 	public function handle_save_settings() {
 		$this->verify( 'quissly_settings' );
 
+		// Most loved: a product search left empty posts nothing - that is an empty list.
+		if ( isset( $_POST['quissly_most_loved_present'] ) ) {
+			foreach ( array( 'quissly_most_loved_shown', 'quissly_most_loved_backups' ) as $key ) {
+				if ( ! isset( $_POST[ $key ] ) ) {
+					Quissly_Settings::update( $key, array() );
+				}
+			}
+		}
 		foreach ( Quissly_Settings::schema() as $key => $def ) {
 			if ( 'bool' === $def['type'] ) {
 				Quissly_Settings::update( $key, isset( $_POST[ $key ] ) ? '1' : '0' );

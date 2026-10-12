@@ -108,6 +108,12 @@ class Quissly_Overlay {
 			'chips'            => self::chips(),
 			/* translators: %s: the store's name. */
 			'labelSuggestions' => '' !== trim( (string) get_bloginfo( 'name' ) ) ? sprintf( __( '%s suggestions', 'quissly-for-woocommerce' ), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) : __( 'Suggestions', 'quissly-for-woocommerce' ),
+			// The merchant's Most loved products, under the buttons (Quissly_Most_Loved; none while off).
+			'mostLoved'        => Quissly_Most_Loved::for_storefront(),
+			/* translators: %s: the store's name. */
+			'labelMostLoved'   => '' !== trim( (string) get_bloginfo( 'name' ) ) ? sprintf( __( '%s Most loved', 'quissly-for-woocommerce' ), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) ) : __( 'Most loved', 'quissly-for-woocommerce' ),
+			/* translators: %s: a rating such as 4.5. */
+			'labelRating'      => __( '%s out of 5', 'quissly-for-woocommerce' ),
 		);
 	}
 
@@ -211,6 +217,45 @@ class Quissly_Overlay {
 			}
 			.quissly-overlay .quissly-overlay__chip:focus-visible {
 			    outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, .35);
+			}
+			/* Most loved: the merchant's picks under the buttons (the Shopify app's cards), in 1, 2 or
+			   4 columns - never 3, which leaves 8 cards as 3 + 3 + 2. */
+			.quissly-overlay__loved { container-type: inline-size; }
+			.quissly-overlay__chips + .quissly-overlay__loved { margin-top: 22px; }
+			.quissly-overlay .quissly-overlay__loved-title {
+			    margin: 0 0 18px; padding: 0 0 14px;
+			    border-bottom: 1px solid #ececf1; text-align: center;
+			    font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.3;
+			    letter-spacing: .14em; text-transform: uppercase; color: #1d1d22;
+			}
+			.quissly-overlay__loved-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+			@container (min-width: 536px) { .quissly-overlay__loved-grid { grid-template-columns: repeat(2, 1fr); } }
+			@container (min-width: 1088px) { .quissly-overlay__loved-grid { grid-template-columns: repeat(4, 1fr); } }
+			.quissly-overlay a.quissly-overlay__loved-card {
+			    display: flex; align-items: center; gap: 16px; padding: 12px;
+			    border-radius: 12px; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .08);
+			    text-decoration: none !important; color: #1d1d22 !important;
+			    transition: box-shadow .15s;
+			}
+			.quissly-overlay a.quissly-overlay__loved-card:hover,
+			.quissly-overlay a.quissly-overlay__loved-card:focus-visible { box-shadow: 0 2px 12px rgba(0, 0, 0, .16); outline: none; }
+			.quissly-overlay__loved-media { flex: 0 0 80px; width: 80px; height: 80px; }
+			.quissly-overlay__loved-media img { display: block; width: 100%; height: 100%; object-fit: contain; }
+			.quissly-overlay__loved-info { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+			.quissly-overlay__loved-name {
+			    font-size: 15px; line-height: 1.35;
+			    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+			}
+			.quissly-overlay__loved-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+			.quissly-overlay__loved-price { font-size: 15px; font-weight: 700; line-height: 1.3; }
+			.quissly-overlay__loved-rating { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #444; white-space: nowrap; }
+			/* Five grey stars with the filled share of five dark ones laid over them. */
+			.quissly-overlay__loved-stars { position: relative; display: inline-block; letter-spacing: 1px; color: #d4d4d8; }
+			.quissly-overlay__loved-stars span { position: absolute; top: 0; left: 0; bottom: 0; overflow: hidden; white-space: nowrap; color: #1d1d22; }
+			.quissly-overlay__loved-variants {
+			    align-self: flex-start; padding: 3px 10px;
+			    border: 1px solid #d4d4da; border-radius: 999px;
+			    font-size: 13px; line-height: 1.3;
 			}
 			@media (max-width: 600px) {
 			    .quissly-overlay__suggest { padding: 16px 16px 18px; border-radius: 18px; }

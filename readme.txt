@@ -4,7 +4,7 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.9
+Stable tag: 1.0.10
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,7 +26,8 @@ When a shopper opens search, Quissly can also help them start:
 * Search Suggestions - buttons under the empty search bar; a click searches for it.
 
 Quissly creates both from your catalog after the first sync, and you can edit them in
-Quissly > Configuration.
+Quissly > Configuration. You can also pick your Most loved products, shown under them as product
+cards.
 
 Stores in several languages (WPML or Polylang) are supported: every language's pages show
 that language's products, and each language can have its own Search Examples and Search
@@ -58,15 +59,16 @@ GPL-licensed; Quissly the service is the paid product.
 
 1. Install and activate WooCommerce.
 2. Download `quissly-for-woocommerce.zip` from the [latest release](https://github.com/quissly/quissly-for-woocommerce/releases/latest) and install it under Plugins > Add New Plugin > Upload Plugin, then activate it.
-3. Open Quissly in the admin menu. Quissly Setup takes three steps: connect (one click, with your email), choose a plan, and go live once your catalog has synced - the sync starts by itself.
+3. Open Quissly in the admin menu. Quissly Setup takes three steps: tell us about your store (your email, store name and what you sell - drafted from your products), choose a plan and how to pay for it (manual invoice or credit card), and go live once your catalog has synced - the sync starts by itself.
 
 == Settings ==
 
-Quissly > Configuration has five sections; click a title to open it.
+Quissly > Configuration has six sections; click a title to open it.
 
 * Features - switch search, the search overlay, Quick results, voice and image search, QChat and shopping analytics on or off.
 * Search Examples - the example searches typed into the empty search bar: switch them on or off and edit the list. "Reset to generated" brings back the list Quissly made from your catalog.
 * Search Suggestions - the buttons under the empty search bar: Automatic (Quissly picks them from your catalog) or Manual (you type up to 10).
+* Most Loved Products - pick 8 products to show when search opens, and 4 backups: when a shown product is out of stock, the first available backup takes its place. Shown only once 12 different products are picked and 8 of them are in stock.
 * Catalog data - which product attributes are sent to Quissly, so a search can match them.
 * Advanced - your theme's search box (only if Quissly does not find it by itself), whether your settings are kept when the plugin is deleted, and how often the plugin checks for updates.
 
@@ -83,6 +85,14 @@ You can change how often it checks under Quissly > Configuration > Advanced > Up
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
 
 == Changelog ==
+
+= 1.0.10 =
+* Added: Most loved products - pick 8 products and 4 backups in Configuration, shown as cards under the search suggestions when search opens. A product picked for both lists, too few picks, or fewer than 8 in stock hides the block, and Configuration says what to fix.
+* Changed: Quissly Setup follows Quissly's other apps: "Tell us about your store" asks for your store name and what you sell (both required, drafted from your store) and says why Save is not available yet; a "What happens next" list shows the three steps.
+* Added: on "Choose a plan", pick how a paid plan is paid - Manual invoice (the default, no payment page) or Credit card (the secure checkout, as before).
+* Changed: "Choose a plan" describes each option ("A smarter search bar", "An AI shopping assistant"); once a plan is chosen, it is changed in Billing after setup.
+* Changed: "Go live" says in one sentence what is left, lists Quissly Account, Smart AI Product Search, AI Shopping Assistant and Your Catalog, and offers "Do this later".
+* Fixed: Finish Setup waits until your account is fully set up, and on a chat-only plan it switches the AI shopping assistant on instead of search.
 
 = 1.0.9 =
 * Changed: a code comment tidied up. No change in how the plugin works.

@@ -30,6 +30,14 @@ class Quissly_Setup {
 	const OPT_CONNECTED_AT = 'quissly_setup_connected_at';
 	const OPT_PLAN         = 'quissly_setup_plan';
 	const OPT_SYNC         = 'quissly_setup_sync';
+	/** The chosen plan's products (qsearch, qchat), as far as Setup saw them. */
+	const OPT_SERVICES = 'quissly_setup_services';
+	/**
+	 * A paid plan the merchant chose to pay by manual invoice: {plan_id, plan, family, cycle, at}.
+	 * Quissly's store billing API has no invoice option yet, so it is recorded here (and in the
+	 * sync log) and the plan step goes straight on to Go live, with no payment page.
+	 */
+	const OPT_INVOICE = 'quissly_setup_invoice';
 
 	const ACTION_ADVANCE = 'quissly_setup_advance';
 	const NONCE          = 'quissly_setup';
@@ -137,7 +145,7 @@ class Quissly_Setup {
 	}
 
 	/**
-	 * Finish Setup without going live (the Shopify app's "Save changes"): for a merchant not
+	 * Finish Setup without going live (the Shopify app's "Do this later"): for a merchant not
 	 * ready to switch search on yet - or whose first sync needs another look - so nobody is held
 	 * on this screen. Needs the services built (the hold over); starts the first sync if it has
 	 * not started, and leaves QSearch off until the merchant switches it on.
@@ -174,11 +182,35 @@ class Quissly_Setup {
 	}
 
 	/**
-	 * The progress list on the Go live step: the Shopify app's rows - store identity,
-	 * organization, project, QSearch service, QChat service, catalog import. Here one Connect
-	 * call creates the first three at once, and the services are built during the hold.
+	 * The chosen plan's products (qsearch, qchat); none when Setup never saw the plan (Quissly's
+	 * plans could not be loaded) - then it is treated as search, as before plans existed.
 	 *
-	 * @return array{ready:bool,failed:bool,saveable:bool,rows:array}
+	 * @return string[]
+	 */
+	public static function services() {
+		return array_values( array_intersect( array( 'qsearch', 'qchat' ), (array) get_option( self::OPT_SERVICES, array() ) ) );
+	}
+
+	/**
+	 * Record the chosen plan's products.
+	 *
+	 * @param string[] $families Plan families.
+	 */
+	private static function choose_services( array $families ) {
+		update_option( self::OPT_PLAN, 1, false );
+		update_option( self::OPT_SERVICES, array_values( array_intersect( array( 'qsearch', 'qchat' ), $families ) ), false );
+	}
+
+	/**
+	 * Where Setup stands for the Go live step (the Shopify app's account setup card): a phase -
+	 * building (the services are being built), importing, failed (no products got through) or
+	 * ready - and the rows: one "Quissly Account" row (store identity, organization and project:
+	 * one Connect call creates all three), search, the assistant (with a chat plan, or no plan
+	 * known - QChat finds products through the search service, so search is always listed) and
+	 * the catalog. A done row has no words; the others say what is happening. The raw problem
+	 * behind a failed import is kept apart, for "Technical details".
+	 *
+	 * @return array{phase:string,ready:bool,failed:bool,saveable:bool,technical:string,rows:array}
 	 */
 	public static function status() {
 		$connected = self::is_connected();
@@ -187,45 +219,55 @@ class Quissly_Setup {
 		$failed    = ! $ready && self::sync_failed();
 		$progress  = Quissly_Sync_Progress::get();
 		$sent      = (int) $progress['ok'] + (int) $progress['already'];
+		$building  = ! $connected || $hold > 0;
+		// Finish waits for the account too (the Shopify app's gate), even over a catalog already in Quissly.
+		$ready     = $ready && ! $building;
+		$technical = '';
 
 		if ( $ready ) {
-			/* translators: %d: products sent. */
-			$catalog = self::row( 'done', $sent > 0 ? sprintf( __( '%d products sent.', 'quissly-for-woocommerce' ), $sent ) : '' );
+			$catalog = self::row( 'done', '' );
 		} elseif ( $failed ) {
-			$refusal = Quissly_Sync_State::refusal();
-			$catalog = self::row(
-				'failed',
-				null !== $refusal
-					/* translators: %d: HTTP status code. */
-					? sprintf( __( 'Quissly is refusing catalog updates (HTTP %d).', 'quissly-for-woocommerce' ), (int) $refusal )
-					: __( 'No products reached Quissly. Check the sync log on the Dashboard, then start the sync again.', 'quissly-for-woocommerce' )
-			);
+			$refusal   = Quissly_Sync_State::refusal();
+			$technical = null !== $refusal
+				/* translators: %d: HTTP status code. */
+				? sprintf( __( 'Quissly is refusing catalog updates (HTTP %d).', 'quissly-for-woocommerce' ), (int) $refusal )
+				: __( 'No products reached Quissly. The sync log on the Dashboard has the details.', 'quissly-for-woocommerce' );
+			$catalog   = self::row( 'failed', __( 'Catalog import failed. Start it again below, or finish setup and retry from the Dashboard.', 'quissly-for-woocommerce' ) );
 		} elseif ( 'idle' !== $progress['status'] ) {
-			/* translators: 1: products sent, 2: products in the sync. */
-			$catalog = self::row( 'running', sprintf( __( '%1$d of %2$d products sent.', 'quissly-for-woocommerce' ), $sent, (int) $progress['total'] ) );
-		} elseif ( $connected && 0 === $hold ) {
-			$catalog = self::row( 'running', __( 'Starting...', 'quissly-for-woocommerce' ) );
+			$catalog = self::row(
+				'running',
+				0 === $sent
+					? __( 'Reading your products...', 'quissly-for-woocommerce' )
+					/* translators: 1: products sent, 2: products in the import. */
+					: sprintf( __( 'Importing your products - %1$d of %2$d', 'quissly-for-woocommerce' ), $sent, (int) $progress['total'] )
+			);
+		} elseif ( ! $building ) {
+			$catalog = self::row( 'running', __( 'Starting shortly', 'quissly-for-woocommerce' ) );
 		} else {
-			$catalog = self::row( 'pending', __( 'Starts as soon as the search service is ready.', 'quissly-for-woocommerce' ) );
+			$catalog = self::row( 'pending', __( 'Starts once your account is ready', 'quissly-for-woocommerce' ) );
 		}
 
-		$created  = self::row( $connected ? 'done' : 'pending', '' );
-		$building = ! $connected ? 'pending' : ( $hold > 0 ? 'running' : 'done' );
+		$services = self::services();
 		$chat     = '' !== (string) Quissly_Settings::get( 'quissly_service_id' );
+		$service  = static function ( $running ) use ( $connected, $building ) {
+			return ! $connected ? self::row( 'pending', __( 'Up next', 'quissly-for-woocommerce' ) )
+				: ( $building ? self::row( 'running', $running ) : self::row( 'done', '' ) );
+		};
 
 		return array(
-			'ready'    => $ready,
-			'failed'   => $failed,
-			'saveable' => $connected && 0 === $hold,
-			'rows'     => array(
-				'store'        => $created,
-				'organization' => $created,
-				'project'      => $created,
-				'qsearch'      => self::row( $building, $hold > 0 ? __( 'Quissly is building your search service.', 'quissly-for-woocommerce' ) : '' ),
-				'qchat'        => ( $chat || 'done' !== $building )
-					? self::row( $building, '' )
-					: self::row( 'pending', __( 'Not found yet - chat can still be switched on later.', 'quissly-for-woocommerce' ) ),
-				'catalog'      => $catalog,
+			'phase'     => $building ? 'building' : ( $ready ? 'ready' : ( $failed ? 'failed' : 'importing' ) ),
+			'ready'     => $ready,
+			'failed'    => $failed,
+			'saveable'  => $connected && 0 === $hold,
+			'technical' => $technical,
+			'rows'      => array(
+				'account' => $connected ? self::row( 'done', '' ) : self::row( 'running', __( 'Creating your account', 'quissly-for-woocommerce' ) ),
+				'qsearch' => $service( __( 'Setting up search', 'quissly-for-woocommerce' ) ),
+				'qchat'   => ( ! empty( $services ) && ! in_array( 'qchat', $services, true ) )
+					? self::row( 'done', '', true )
+					: ( ( $chat || $building ) ? $service( __( 'Setting up the assistant', 'quissly-for-woocommerce' ) )
+						: self::row( 'pending', __( 'Not ready yet - you can switch chat on later in Configuration.', 'quissly-for-woocommerce' ) ) ),
+				'catalog' => $catalog,
 			),
 		);
 	}
@@ -235,10 +277,11 @@ class Quissly_Setup {
 	 *
 	 * @param string $state  done|running|pending|failed.
 	 * @param string $detail Line under the label.
-	 * @return array{state:string,detail:string}
+	 * @param bool   $hidden Not part of this plan.
+	 * @return array{state:string,detail:string,hidden:bool}
 	 */
-	private static function row( $state, $detail ) {
-		return array( 'state' => $state, 'detail' => $detail );
+	private static function row( $state, $detail, $hidden = false ) {
+		return array( 'state' => $state, 'detail' => $detail, 'hidden' => $hidden );
 	}
 
 	// ---------------------------------------------------------------------------------
@@ -276,15 +319,17 @@ class Quissly_Setup {
 		if ( '' !== $problem ) {
 			wp_send_json( array( 'ok' => false, 'message' => $problems[ $problem ] ) );
 		}
+		if ( '' === trim( $store_name ) || '' === trim( $description ) ) {
+			wp_send_json( array( 'ok' => false, 'message' => __( 'Store name and what you sell are both required.', 'quissly-for-woocommerce' ) ) );
+		}
 		if ( ! Quissly_Setup_Input::isNameValid( $store_name ) ) {
-			wp_send_json( array( 'ok' => false, 'message' => __( 'Use letters, numbers, spaces and hyphens in the store name.', 'quissly-for-woocommerce' ) ) );
+			wp_send_json( array( 'ok' => false, 'message' => __( 'Store name can only contain letters, numbers, spaces and hyphens.', 'quissly-for-woocommerce' ) ) );
+		}
+		if ( mb_strlen( $description ) > 500 ) {
+			wp_send_json( array( 'ok' => false, 'message' => __( 'Description must be 500 characters or fewer.', 'quissly-for-woocommerce' ) ) );
 		}
 
-		$result = Quissly_Wizard::connect_automatically(
-			$email,
-			'' !== $store_name ? mb_substr( $store_name, 0, 100 ) : null,
-			'' !== $description ? $description : null
-		);
+		$result = Quissly_Wizard::connect_automatically( $email, trim( $store_name ), trim( $description ) );
 		if ( ! $result['ok'] ) {
 			wp_send_json( array( 'ok' => false, 'message' => $result['message'] ) );
 		}
@@ -298,7 +343,7 @@ class Quissly_Setup {
 	}
 
 	/**
-	 * Step 2: checkout / check / keep / later (see quissly-for-magento's Setup\Plan).
+	 * Step 2: checkout / check / keep / later / invoice (see quissly-for-magento's Setup\Plan).
 	 */
 	public function ajax_plan() {
 		$this->verify();
@@ -307,6 +352,12 @@ class Quissly_Setup {
 		}
 		$billing = new Quissly_Store_Billing();
 		$op      = isset( $_POST['op'] ) ? sanitize_key( wp_unslash( $_POST['op'] ) ) : '';
+
+		// The plan is chosen once during setup (the Shopify app's rule): a stale tab posting again
+		// would otherwise start a second plan. Changes happen in Billing afterwards.
+		if ( get_option( self::OPT_PLAN ) && ! self::is_complete() ) {
+			wp_send_json( array( 'ok' => false, 'message' => __( 'Your plan is already active. You can change it in Billing once setup is finished.', 'quissly-for-woocommerce' ) ) );
+		}
 
 		if ( 'checkout' === $op ) {
 			$checkout = $billing->checkout(
@@ -317,7 +368,7 @@ class Quissly_Setup {
 				wp_send_json( array( 'ok' => false, 'message' => $checkout['message'] ) );
 			}
 			if ( 'free_activated' === $checkout['kind'] ) {
-				update_option( self::OPT_PLAN, 1, false );
+				self::choose_services( array( isset( $_POST['family'] ) ? sanitize_key( wp_unslash( $_POST['family'] ) ) : 'qsearch' ) );
 				wp_send_json( array( 'ok' => true, 'kind' => 'active' ) );
 			}
 			wp_send_json( array( 'ok' => true, 'kind' => 'pay', 'pay_url' => $checkout['pay_url'] ) );
@@ -332,7 +383,7 @@ class Quissly_Setup {
 			$family = isset( $_POST['family'] ) ? sanitize_key( wp_unslash( $_POST['family'] ) ) : '';
 			$active = '' !== $family ? isset( $live[ $family ] ) : ! empty( $live );
 			if ( $active ) {
-				update_option( self::OPT_PLAN, 1, false );
+				self::choose_services( array_keys( $live ) );
 			}
 			wp_send_json(
 				array(
@@ -343,9 +394,35 @@ class Quissly_Setup {
 			);
 		}
 
+		// A paid plan paid by manual invoice: no checkout, recorded, on to Go live.
+		if ( 'invoice' === $op ) {
+			$plan_id = isset( $_POST['plan_id'] ) ? sanitize_text_field( wp_unslash( $_POST['plan_id'] ) ) : '';
+			$cycle   = isset( $_POST['billing_cycle'] ) && 'annual' === $_POST['billing_cycle'] ? 'annual' : 'monthly';
+			$plans   = $billing->plans();
+			$plan    = null;
+			foreach ( ( null === $plans ? array() : (array) $plans['plans'] ) as $row ) {
+				if ( isset( $row['id'] ) && (string) $row['id'] === $plan_id && empty( $row['is_free'] ) ) {
+					$plan = $row;
+				}
+			}
+			if ( null === $plan ) {
+				wp_send_json( array( 'ok' => false, 'message' => __( 'Choose a plan to continue.', 'quissly-for-woocommerce' ) ) );
+			}
+			$family = (string) $plan['family'];
+			$name   = $this->plan_name( $family, isset( $plan['tier'] ) ? (string) $plan['tier'] : '' );
+			update_option(
+				self::OPT_INVOICE,
+				array( 'plan_id' => $plan_id, 'plan' => $name, 'family' => $family, 'cycle' => $cycle, 'at' => time() ),
+				false
+			);
+			self::choose_services( array( $family ) );
+			Quissly_Sync_Log::log( sprintf( 'Plan chosen for manual invoice: %s, billed %s.', $name, $cycle ) );
+			wp_send_json( array( 'ok' => true, 'kind' => 'invoice' ) );
+		}
+
 		// Only while the plans cannot be loaded, so a Quissly outage never strands a merchant.
 		if ( 'later' === $op && null === $billing->plans() ) {
-			update_option( self::OPT_PLAN, 1, false );
+			self::choose_services( array() );
 			wp_send_json( array( 'ok' => true ) );
 		}
 
@@ -366,12 +443,12 @@ class Quissly_Setup {
 	}
 
 	/**
-	 * Finish Setup: QSearch switches on, Setup is done, the Dashboard takes over. With
-	 * later=1 it is the Shopify app's "Save changes": done, but QSearch stays off.
+	 * Finish Setup: what the plan includes switches on, Setup is done, the Dashboard takes over.
+	 * With later=1 it is the Shopify app's "Do this later": done, but nothing is switched on.
 	 */
 	public function ajax_finish() {
 		$this->verify();
-		if ( ! empty( $_POST['later'] ) ) { // "Save changes".
+		if ( ! empty( $_POST['later'] ) ) { // "Do this later".
 			if ( ! self::save_for_later() ) {
 				wp_send_json( array( 'ok' => false, 'message' => __( 'Quissly is still building your services. Try again in a minute.', 'quissly-for-woocommerce' ) ) );
 			}
@@ -382,12 +459,20 @@ class Quissly_Setup {
 				)
 			);
 		}
-		if ( ! self::is_ready() ) {
+		if ( ! self::is_ready() || self::hold_remaining() > 0 ) {
 			wp_send_json( array( 'ok' => false, 'message' => __( 'Your catalog is still on its way to Quissly. Finish Setup unlocks when it is ready.', 'quissly-for-woocommerce' ) ) );
 		}
-		Quissly_Settings::update( 'quissly_enable_search', true );
+		// What the plan includes goes live: search (also with no plan known), and the assistant
+		// with a chat plan - a chat-only plan does not switch search on.
+		$services = self::services();
+		if ( empty( $services ) || in_array( 'qsearch', $services, true ) ) {
+			Quissly_Settings::update( 'quissly_enable_search', true );
+		}
+		if ( in_array( 'qchat', $services, true ) && '' !== (string) Quissly_Settings::get( 'quissly_service_id' ) ) {
+			Quissly_Settings::update( 'quissly_enable_qchat', true );
+		}
 		update_option( Quissly_Wizard::OPT_COMPLETE, true, false );
-		Quissly_Sync_Log::log( 'Quissly Setup finished; QSearch is live.' );
+		Quissly_Sync_Log::log( 'Quissly Setup finished; ' . ( empty( $services ) ? 'qsearch' : implode( ' and ', $services ) ) . ' is live.' );
 		wp_send_json(
 			array(
 				'ok'       => true,
@@ -404,8 +489,19 @@ class Quissly_Setup {
 	 * Enqueue the shared stylesheet and script.
 	 */
 	public static function enqueue() {
-		wp_enqueue_style( 'quissly-setup', QUISSLY_PLUGIN_URL . 'assets/css/quissly-setup.css', array(), QUISSLY_VERSION );
-		wp_enqueue_script( 'quissly-setup', QUISSLY_PLUGIN_URL . 'assets/js/quissly-setup.js', array(), QUISSLY_VERSION, true );
+		// WooCommerce's own dropdown (selectWoo, as on its settings pages) for the plan step's
+		// Payment choice, when WooCommerce has it; the shared script reads the select either way.
+		$select_woo = wp_script_is( 'selectWoo', 'registered' ) && wp_style_is( 'woocommerce_admin_styles', 'registered' );
+		wp_enqueue_style( 'quissly-setup', QUISSLY_PLUGIN_URL . 'assets/css/quissly-setup.css', $select_woo ? array( 'woocommerce_admin_styles' ) : array(), QUISSLY_VERSION );
+		wp_enqueue_script( 'quissly-setup', QUISSLY_PLUGIN_URL . 'assets/js/quissly-setup.js', $select_woo ? array( 'jquery', 'selectWoo' ) : array(), QUISSLY_VERSION, true );
+		if ( $select_woo ) {
+			// selectWoo announces a choice with jQuery's change only; the shared script listens
+			// for the browser's, so it is passed on (a browser change carries originalEvent).
+			wp_add_inline_script(
+				'quissly-setup',
+				"jQuery( function ( $ ) { $( '[data-q-pay-method]' ).selectWoo( { minimumResultsForSearch: Infinity, width: '190px' } ).on( 'change', function ( event ) { if ( ! event.originalEvent ) { this.dispatchEvent( new Event( 'change' ) ); } } ); } );"
+			);
+		}
 	}
 
 	/**
@@ -422,6 +518,8 @@ class Quissly_Setup {
 		return array(
 			'step'      => $step,
 			'reached'   => $step,
+			// The plan is chosen: its step is closed until setup is finished (Billing changes it).
+			'planLocked' => self::STEP_GOLIVE === $step,
 			'reload'    => admin_url( 'admin.php?page=' . Quissly_Admin::PAGE_SETTINGS ),
 			'csrf'      => array( '_ajax_nonce' => wp_create_nonce( self::NONCE ) ),
 			'endpoints' => array(
@@ -433,8 +531,9 @@ class Quissly_Setup {
 			'text'      => array(
 				'connecting'  => __( 'Creating your Quissly account...', 'quissly-for-woocommerce' ),
 				'saving'      => __( 'Saving...', 'quissly-for-woocommerce' ),
-				'goingLive'   => __( 'Going live...', 'quissly-for-woocommerce' ),
+				'goingLive'   => __( 'Finishing...', 'quissly-for-woocommerce' ),
 				'pickPlan'    => __( 'Pick a plan to continue', 'quissly-for-woocommerce' ),
+				'invoiceNote' => __( 'paid by invoice, no card needed now', 'quissly-for-woocommerce' ),
 				/* translators: %1: yearly saving, e.g. $160. */
 				'saveYear'    => __( 'Save %1/yr', 'quissly-for-woocommerce' ),
 				/* translators: %d: annual discount percentage. */
@@ -448,15 +547,40 @@ class Quissly_Setup {
 				'emailInvalid'  => __( 'Enter a valid email address, like name@example.com.', 'quissly-for-woocommerce' ),
 				'emailTooLong'  => __( 'Email address is too long.', 'quissly-for-woocommerce' ),
 				'emailPublic'   => __( 'Use an address on a real, public domain.', 'quissly-for-woocommerce' ),
-				'nameInvalid'   => __( 'Use letters, numbers, spaces and hyphens in the store name.', 'quissly-for-woocommerce' ),
+				'nameInvalid'   => __( 'Use only letters, numbers, spaces and hyphens.', 'quissly-for-woocommerce' ),
+				// Why Save is disabled, in the bar beside it: the first problem only.
+				'blockers'      => array(
+					'emailMissing' => __( 'Add an email to continue.', 'quissly-for-woocommerce' ),
+					'emailInvalid' => __( 'Fix the email to continue.', 'quissly-for-woocommerce' ),
+					'nameMissing'  => __( 'Add your store name to continue.', 'quissly-for-woocommerce' ),
+					'nameInvalid'  => __( 'Fix the store name to continue.', 'quissly-for-woocommerce' ),
+					'sellMissing'  => __( 'Add what you sell to continue.', 'quissly-for-woocommerce' ),
+					'none'         => __( 'Nothing is charged yet.', 'quissly-for-woocommerce' ),
+				),
 				'chipWorking' => __( 'Setting up...', 'quissly-for-woocommerce' ),
 				'chipReady'   => __( 'Ready', 'quissly-for-woocommerce' ),
-				'chipFailed'  => __( 'Needs attention', 'quissly-for-woocommerce' ),
 				'states'      => array(
 					'done'    => __( 'Done', 'quissly-for-woocommerce' ),
 					'running' => __( 'Running', 'quissly-for-woocommerce' ),
-					'pending' => __( 'Waiting', 'quissly-for-woocommerce' ),
+					'pending' => __( 'Pending', 'quissly-for-woocommerce' ),
 					'failed'  => __( 'Failed', 'quissly-for-woocommerce' ),
+				),
+				// Go live, by phase: the one sentence on what is left, the account setup card's
+				// words, and the note beside Finish.
+				'intro'       => array(
+					'building'  => __( 'We\'re setting up your account - usually about a minute. Then your products are sent to Quissly.', 'quissly-for-woocommerce' ),
+					'importing' => __( 'Your products are on their way to Quissly. Finish Setup unlocks once they\'re in.', 'quissly-for-woocommerce' ),
+					'failed'    => __( 'One thing left: your products didn\'t reach Quissly. Start the import again under Account setup, or do this later.', 'quissly-for-woocommerce' ),
+					'ready'     => __( 'Everything is ready. Finish setup to switch Quissly on and open your dashboard.', 'quissly-for-woocommerce' ),
+				),
+				'body'        => array(
+					'building' => __( 'We do this part for you - nothing to click. This page updates by itself.', 'quissly-for-woocommerce' ),
+					'built'    => __( 'All done. Here\'s what we set up for your store.', 'quissly-for-woocommerce' ),
+				),
+				'note'        => array(
+					'building' => __( 'Finish unlocks when account setup completes.', 'quissly-for-woocommerce' ),
+					'waiting'  => __( 'Not ready yet? Do this later and turn Quissly on from Configuration.', 'quissly-for-woocommerce' ),
+					'ready'    => __( 'All set - finish setup to open your dashboard.', 'quissly-for-woocommerce' ),
 				),
 			),
 		);
@@ -539,9 +663,10 @@ class Quissly_Setup {
 		$extra      = isset( $quota['extra_block'] ) ? $quota['extra_block'] : null;
 
 		if ( 'qchat' === $family && 0 === $requests ) {
-			$usage = array( __( 'Human agents only', 'quissly-for-woocommerce' ), __( 'no AI messages', 'quissly-for-woocommerce' ) );
+			// The human-only tier: "0" would read as a broken plan, so it says so in words.
+			$usage = array( __( 'Live chat', 'quissly-for-woocommerce' ), __( 'answered by your team', 'quissly-for-woocommerce' ) );
 		} else {
-			$usage = array( number_format_i18n( $requests ), 'qchat' === $family ? __( 'AI messages / mo', 'quissly-for-woocommerce' ) : __( 'searches / mo', 'quissly-for-woocommerce' ) );
+			$usage = array( number_format_i18n( $requests ), 'qchat' === $family ? __( 'AI chat messages a month', 'quissly-for-woocommerce' ) : __( 'searches a month', 'quissly-for-woocommerce' ) );
 		}
 		$extra_figure = is_array( $extra )
 			/* translators: 1: price, 2: number of requests. */
@@ -718,6 +843,8 @@ class Quissly_Setup {
 		$domain    = $this->domain();
 		$user      = wp_get_current_user();
 		$draft     = $connected ? '' : $this->description_draft();
+		$locked    = self::STEP_GOLIVE === $step;
+		$services  = self::services();
 
 		include QUISSLY_PLUGIN_DIR . 'admin/views/setup.php';
 	}

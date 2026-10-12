@@ -14,21 +14,24 @@
  * @var string     $domain    Storefront host.
  * @var WP_User    $user      Signed-in admin.
  * @var string     $draft     The drafted workspace description.
+ * @var bool       $locked    The plan is chosen: the plan step is closed until setup is finished.
+ * @var string[]   $services  The chosen plan's products (qsearch, qchat); none = not known.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-// The Shopify app's provisioning rows, in its order.
+// The Shopify app's account setup rows, in its order: store identity, organization and project
+// mean nothing to a merchant, so they are one "Quissly Account" row.
 $quissly_rows       = array(
-	'store'        => __( 'Store identity', 'quissly-for-woocommerce' ),
-	'organization' => __( 'Organization', 'quissly-for-woocommerce' ),
-	'project'      => __( 'Project', 'quissly-for-woocommerce' ),
-	'qsearch'      => __( 'QSearch service', 'quissly-for-woocommerce' ),
-	'qchat'        => __( 'QChat service', 'quissly-for-woocommerce' ),
-	'catalog'      => __( 'Catalog import', 'quissly-for-woocommerce' ),
+	'account' => __( 'Quissly Account', 'quissly-for-woocommerce' ),
+	'qsearch' => __( 'Smart AI Product Search', 'quissly-for-woocommerce' ),
+	'qchat'   => __( 'AI Shopping Assistant', 'quissly-for-woocommerce' ),
+	'catalog' => __( 'Your Catalog', 'quissly-for-woocommerce' ),
 );
+$quissly_search     = empty( $services ) || in_array( 'qsearch', $services, true );
+$quissly_chat       = in_array( 'qchat', $services, true );
 $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_display_name() );
 ?>
 <div class="q-setup" data-q-setup data-config="<?php echo esc_attr( wp_json_encode( $this->config( $step, $plans ) ) ); ?>">
@@ -44,7 +47,7 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 			<img class="q-band__logo" src="<?php echo esc_url( QUISSLY_PLUGIN_URL . 'assets/images/quissly-wordmark.svg' ); ?>" alt="Quissly" height="20">
 			<div class="q-band__titles">
 				<div class="q-band__title"><?php esc_html_e( 'Let\'s get Quissly running on your store', 'quissly-for-woocommerce' ); ?></div>
-				<div class="q-band__sub"><?php esc_html_e( 'Three short steps. Nothing reaches your storefront until you go live.', 'quissly-for-woocommerce' ); ?></div>
+				<div class="q-band__sub"><?php esc_html_e( 'Three short steps, about five minutes.', 'quissly-for-woocommerce' ); ?></div>
 			</div>
 			<div class="q-band__progress">
 				<div class="q-band__progress-label">
@@ -64,7 +67,8 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 					<li class="q-stepper__line" aria-hidden="true"></li>
 				<?php endif; ?>
 				<li class="q-stepper__item">
-					<button type="button" data-q-goto="<?php echo esc_attr( $quissly_key ); ?>">
+					<?php /* The plan is chosen once, on its own step: never a link back to it. */ ?>
+					<button type="button" data-q-goto="<?php echo esc_attr( $quissly_key ); ?>"<?php echo ( $locked && 'plan' === $quissly_key ) ? ' disabled' : ''; ?>>
 						<span class="q-stepper__dot"><?php echo $quissly_index < $done ? '&#10003;' : (int) ( $quissly_index + 1 ); ?></span>
 						<span><?php echo esc_html( $quissly_label ); ?></span>
 					</button>
@@ -81,76 +85,65 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 				<div class="q-card">
 					<?php /* translators: 1: step, 2: steps in all. */ ?>
 					<div class="q-kicker"><?php echo esc_html( sprintf( __( 'Step %1$d of %2$d', 'quissly-for-woocommerce' ), 1, 3 ) ); ?></div>
-					<h2><?php esc_html_e( 'Your details', 'quissly-for-woocommerce' ); ?></h2>
-					<p class="q-desc"><?php esc_html_e( 'We use this email for your Quissly account and billing notifications.', 'quissly-for-woocommerce' ); ?></p>
+					<h2><?php esc_html_e( 'Tell us about your store', 'quissly-for-woocommerce' ); ?></h2>
+					<p class="q-desc"><?php esc_html_e( 'We filled this in from your store. Check it\'s right and fix anything that isn\'t - Quissly uses it to understand your products.', 'quissly-for-woocommerce' ); ?></p>
 					<?php if ( $connected ) : ?>
 						<div class="q-field">
 							<label for="q-email"><?php esc_html_e( 'Email', 'quissly-for-woocommerce' ); ?></label>
 							<input id="q-email" type="email" readonly value="<?php echo esc_attr( (string) Quissly_Settings::get( 'quissly_account_email' ) ); ?>">
-							<p class="q-help"><?php esc_html_e( 'Your store is connected to this Quissly account.', 'quissly-for-woocommerce' ); ?></p>
+							<p class="q-help"><?php esc_html_e( 'Your Quissly account uses this address. To change it, contact Quissly support.', 'quissly-for-woocommerce' ); ?></p>
 						</div>
 					<?php else : ?>
 						<div class="q-field">
-							<label for="q-email"><?php esc_html_e( 'Email', 'quissly-for-woocommerce' ); ?></label>
-							<input id="q-email" name="email" type="email" required autocomplete="email" value="<?php echo esc_attr( $user->user_email ); ?>">
-							<p class="q-help"><?php esc_html_e( 'Account and billing emails go here. This can\'t be changed later.', 'quissly-for-woocommerce' ); ?></p>
+							<label for="q-email"><?php esc_html_e( 'Email for account updates', 'quissly-for-woocommerce' ); ?></label>
+							<input id="q-email" name="email" type="email" required autocomplete="email" placeholder="merchant@example.com" value="<?php echo esc_attr( $user->user_email ); ?>">
+							<p class="q-help"><?php esc_html_e( 'We send account and billing emails here. It can\'t be changed once your account is created.', 'quissly-for-woocommerce' ); ?></p>
 							<p class="q-help q-help--error" data-q-field-error="email" hidden></p>
 						</div>
 						<div class="q-field">
 							<label for="q-store-name"><?php esc_html_e( 'Store name', 'quissly-for-woocommerce' ); ?></label>
-							<input id="q-store-name" name="store_name" type="text" maxlength="100" value="<?php echo esc_attr( $quissly_store_name ); ?>" placeholder="<?php echo esc_attr( $domain ); ?>">
-							<?php /* translators: %s: the store's domain. */ ?>
-							<p class="q-help"><?php echo esc_html( sprintf( __( 'Letters, numbers, spaces and hyphens. Your Quissly workspace is named after it; left empty, it is named after %s.', 'quissly-for-woocommerce' ), $domain ) ); ?></p>
+							<input id="q-store-name" name="store_name" type="text" required maxlength="60" value="<?php echo esc_attr( $quissly_store_name ); ?>" placeholder="<?php esc_attr_e( 'Acme Outdoors', 'quissly-for-woocommerce' ); ?>">
+							<p class="q-help"><?php esc_html_e( 'Letters, numbers, spaces and hyphens.', 'quissly-for-woocommerce' ); ?></p>
 							<p class="q-help q-help--error" data-q-field-error="store_name" hidden></p>
 						</div>
 						<div class="q-field">
-							<label for="q-description"><?php esc_html_e( 'Description', 'quissly-for-woocommerce' ); ?> <span class="q-optional"><?php esc_html_e( '(optional)', 'quissly-for-woocommerce' ); ?></span></label>
-							<textarea id="q-description" name="description" rows="3" maxlength="500"><?php echo esc_textarea( $draft ); ?></textarea>
-							<p class="q-help"><?php esc_html_e( 'Drafted from your store. A short note on what you sell, so Quissly and your team recognise this workspace.', 'quissly-for-woocommerce' ); ?></p>
+							<label for="q-description"><?php esc_html_e( 'What do you sell?', 'quissly-for-woocommerce' ); ?></label>
+							<textarea id="q-description" name="description" rows="4" required maxlength="500" placeholder="<?php esc_attr_e( 'e.g. Outdoor gear and camping equipment', 'quissly-for-woocommerce' ); ?>"><?php echo esc_textarea( $draft ); ?></textarea>
+							<p class="q-help"><?php echo esc_html( '' !== $draft ? __( 'Drafted from your store\'s products. Edit anything that isn\'t right.', 'quissly-for-woocommerce' ) : __( 'One or two sentences about what you sell and who it\'s for.', 'quissly-for-woocommerce' ) ); ?></p>
 						</div>
 						<p class="q-help"><a href="<?php echo esc_url( admin_url( 'admin.php?page=' . Quissly_Admin::PAGE_SETTINGS . '&quissly_manual=1' ) ); ?>"><?php esc_html_e( 'Already have a token? Paste it manually.', 'quissly-for-woocommerce' ); ?></a></p>
 					<?php endif; ?>
 					<div class="q-notice q-notice--error" data-q-error hidden></div>
 				</div>
-				<?php if ( ! $connected ) : ?>
-				<aside class="q-card q-card--side">
-					<div class="q-kicker"><?php esc_html_e( 'Preview', 'quissly-for-woocommerce' ); ?></div>
-					<div class="q-preview">
-						<div class="q-preview__kicker"><?php esc_html_e( 'Workspace', 'quissly-for-woocommerce' ); ?></div>
-						<div class="q-preview__name" data-q-preview="store_name" data-fallback="<?php echo esc_attr( $domain ); ?>"><?php echo esc_html( '' !== $quissly_store_name ? $quissly_store_name : $domain ); ?></div>
-						<p class="q-preview__desc" data-q-preview="description" data-fallback="<?php esc_attr_e( 'No description yet.', 'quissly-for-woocommerce' ); ?>"><?php echo esc_html( '' !== $draft ? $draft : __( 'No description yet.', 'quissly-for-woocommerce' ) ); ?></p>
-					</div>
-					<p class="q-side-foot"><?php esc_html_e( 'Nothing is charged and nothing is published until you say so.', 'quissly-for-woocommerce' ); ?></p>
-				</aside>
-				<?php else : ?>
+				<?php /* "What happens next": the whole setup at a glance (the Shopify app's SetupJourney). */ ?>
 				<aside class="q-card q-card--side">
 					<div class="q-kicker"><?php esc_html_e( 'What happens next', 'quissly-for-woocommerce' ); ?></div>
-					<ul class="q-next">
-						<li>
+					<ol class="q-journey">
+						<li class="q-journey__item is-current">
+							<strong><?php esc_html_e( 'Tell us about your store', 'quissly-for-woocommerce' ); ?></strong>
+							<span><?php esc_html_e( 'You\'re here. It takes a minute.', 'quissly-for-woocommerce' ); ?></span>
+						</li>
+						<li class="q-journey__item">
 							<strong><?php esc_html_e( 'Pick a plan', 'quissly-for-woocommerce' ); ?></strong>
-							<span><?php esc_html_e( 'Start free, or try a paid plan for 14 days.', 'quissly-for-woocommerce' ); ?></span>
+							<span><?php esc_html_e( 'Start free, or pick a paid plan and pay on a secure checkout page.', 'quissly-for-woocommerce' ); ?></span>
 						</li>
-						<li>
-							<strong><?php esc_html_e( 'Your catalog syncs', 'quissly-for-woocommerce' ); ?></strong>
-							<span><?php esc_html_e( 'Your products are sent to Quissly in the background.', 'quissly-for-woocommerce' ); ?></span>
+						<li class="q-journey__item">
+							<strong><?php esc_html_e( 'Turn Quissly on', 'quissly-for-woocommerce' ); ?></strong>
+							<span><?php esc_html_e( 'We set everything up and import your products. Then you switch Quissly on.', 'quissly-for-woocommerce' ); ?></span>
 						</li>
-						<li>
-							<strong><?php esc_html_e( 'Go live', 'quissly-for-woocommerce' ); ?></strong>
-							<span><?php esc_html_e( 'Switch Quissly search on once your catalog is ready.', 'quissly-for-woocommerce' ); ?></span>
-						</li>
-					</ul>
-					<p class="q-side-foot"><?php esc_html_e( 'Nothing is charged and nothing is published until you say so.', 'quissly-for-woocommerce' ); ?></p>
+					</ol>
+					<p class="q-side-foot"><?php esc_html_e( 'Nothing is charged until you pick a paid plan, and your store doesn\'t change until you turn Quissly on.', 'quissly-for-woocommerce' ); ?></p>
 				</aside>
-				<?php endif; ?>
 			</div>
 			<div class="q-actionbar">
-				<span class="q-actionbar__note">
-					<?php echo esc_html( $connected ? __( 'Connected to Quissly.', 'quissly-for-woocommerce' ) : __( 'One click creates your Quissly account and connects this store.', 'quissly-for-woocommerce' ) ); ?>
+				<?php /* Why Save is disabled, beside it: the first problem only (quissly-setup.js). */ ?>
+				<span class="q-actionbar__note" data-q-details-note>
+					<?php echo esc_html( $connected ? __( 'Connected to Quissly.', 'quissly-for-woocommerce' ) : __( 'Nothing is charged yet.', 'quissly-for-woocommerce' ) ); ?>
 				</span>
 				<?php if ( $connected ) : ?>
-					<button type="button" class="q-btn" data-q-forward="plan"><?php esc_html_e( 'Continue', 'quissly-for-woocommerce' ); ?></button>
+					<button type="button" class="q-btn" data-q-forward="<?php echo $locked ? 'golive' : 'plan'; ?>"><?php esc_html_e( 'Continue', 'quissly-for-woocommerce' ); ?></button>
 				<?php else : ?>
-					<button type="submit" class="q-btn" data-q-connect-submit><?php esc_html_e( 'Connect & continue', 'quissly-for-woocommerce' ); ?></button>
+					<button type="submit" class="q-btn" data-q-connect-submit><?php esc_html_e( 'Save & continue', 'quissly-for-woocommerce' ); ?></button>
 				<?php endif; ?>
 			</div>
 		</form>
@@ -165,17 +158,28 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 					<?php /* translators: 1: step, 2: steps in all. */ ?>
 					<div class="q-kicker"><?php echo esc_html( sprintf( __( 'Step %1$d of %2$d', 'quissly-for-woocommerce' ), 2, 3 ) ); ?></div>
 					<h2><?php esc_html_e( 'Choose a plan', 'quissly-for-woocommerce' ); ?></h2>
+					<p class="q-plan-head__desc"><?php esc_html_e( 'Change or cancel anytime in Billing.', 'quissly-for-woocommerce' ); ?></p>
 				</div>
 				<?php if ( null !== $plans && null === $plans['current'] ) : ?>
-					<div class="q-cadence" role="radiogroup" aria-label="<?php esc_attr_e( 'Billing', 'quissly-for-woocommerce' ); ?>">
-						<button type="button" role="radio" data-q-cadence="monthly" aria-checked="true">
-							<strong><?php esc_html_e( 'Monthly', 'quissly-for-woocommerce' ); ?></strong>
-							<small><?php esc_html_e( 'Pay as you go', 'quissly-for-woocommerce' ); ?></small>
-						</button>
-						<button type="button" role="radio" data-q-cadence="annual" aria-checked="false">
-							<strong><?php esc_html_e( 'Annual', 'quissly-for-woocommerce' ); ?></strong>
-							<small data-q-saving></small>
-						</button>
+					<div class="q-plan-head__controls">
+						<div class="q-cadence" role="radiogroup" aria-label="<?php esc_attr_e( 'Billing', 'quissly-for-woocommerce' ); ?>">
+							<button type="button" role="radio" data-q-cadence="monthly" aria-checked="true">
+								<strong><?php esc_html_e( 'Monthly', 'quissly-for-woocommerce' ); ?></strong>
+								<small><?php esc_html_e( 'Pay as you go', 'quissly-for-woocommerce' ); ?></small>
+							</button>
+							<button type="button" role="radio" data-q-cadence="annual" aria-checked="false">
+								<strong><?php esc_html_e( 'Annual', 'quissly-for-woocommerce' ); ?></strong>
+								<small data-q-saving></small>
+							</button>
+						</div>
+						<?php /* How a paid plan is paid: an invoice (the default - no payment page) or a card on Paddle's checkout. */ ?>
+						<div class="q-pay-method">
+							<label for="q-pay-method"><?php esc_html_e( 'Payment', 'quissly-for-woocommerce' ); ?></label>
+							<select id="q-pay-method" data-q-pay-method>
+								<option value="invoice" selected><?php esc_html_e( 'Manual invoice', 'quissly-for-woocommerce' ); ?></option>
+								<option value="card"><?php esc_html_e( 'Credit card', 'quissly-for-woocommerce' ); ?></option>
+							</select>
+						</div>
 					</div>
 				<?php endif; ?>
 			</div>
@@ -189,9 +193,11 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 				<?php if ( ! $plans['billing_open'] ) : ?>
 					<div class="q-notice q-notice--warn"><?php esc_html_e( 'Paid plans open soon. Start on the free plan now and upgrade any time.', 'quissly-for-woocommerce' ); ?></div>
 				<?php endif; ?>
-				<div class="q-tabs" role="tablist">
-					<button type="button" role="tab" data-q-tab="qsearch" aria-selected="true"><?php esc_html_e( 'Search', 'quissly-for-woocommerce' ); ?></button>
-					<button type="button" role="tab" data-q-tab="qchat" aria-selected="false"><?php esc_html_e( 'Chat', 'quissly-for-woocommerce' ); ?></button>
+				<?php /* Each option says what it adds, so nobody has to know what QSearch or QChat is. */ ?>
+				<p class="q-listhead" id="q-want"><?php esc_html_e( 'What do you want on your store?', 'quissly-for-woocommerce' ); ?></p>
+				<div class="q-tabs q-tabs--choices" role="tablist" aria-labelledby="q-want">
+					<button type="button" role="tab" data-q-tab="qsearch" aria-selected="true"><strong><?php esc_html_e( 'Search', 'quissly-for-woocommerce' ); ?></strong><small><?php esc_html_e( 'A smarter search bar', 'quissly-for-woocommerce' ); ?></small></button>
+					<button type="button" role="tab" data-q-tab="qchat" aria-selected="false"><strong><?php esc_html_e( 'Chat', 'quissly-for-woocommerce' ); ?></strong><small><?php esc_html_e( 'An AI shopping assistant', 'quissly-for-woocommerce' ); ?></small></button>
 				</div>
 				<div data-q-plan-picker>
 					<?php foreach ( $plans['families'] as $quissly_family => $quissly_cards ) : ?>
@@ -244,7 +250,7 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 									<tbody>
 										<?php
 										$quissly_compare_rows = array(
-											array( 'qchat' === $quissly_family ? __( 'AI messages / month', 'quissly-for-woocommerce' ) : __( 'Searches / month', 'quissly-for-woocommerce' ), 'usage' ),
+											array( 'qchat' === $quissly_family ? __( 'AI chat messages a month', 'quissly-for-woocommerce' ) : __( 'Searches a month', 'quissly-for-woocommerce' ), 'usage' ),
 											array( __( 'Extra requests', 'quissly-for-woocommerce' ), 'extra' ),
 											array( __( 'Billed yearly', 'quissly-for-woocommerce' ), 'annual_total' ),
 											array( __( 'Free trial', 'quissly-for-woocommerce' ), 'trial_label' ),
@@ -270,6 +276,7 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 				</div>
 				<div class="q-compare-row">
 					<button type="button" class="q-btn q-btn--quiet q-btn--small" data-q-compare><?php esc_html_e( 'Compare all features', 'quissly-for-woocommerce' ); ?></button>
+					<span class="q-compare-row__note"><?php esc_html_e( 'Not sure? Growth is our most popular plan, and you can change anytime.', 'quissly-for-woocommerce' ); ?></span>
 				</div>
 				<div class="q-notice" data-q-pay hidden>
 					<?php esc_html_e( 'Finish the payment in the tab that opened. This page moves on by itself once Quissly has it.', 'quissly-for-woocommerce' ); ?>
@@ -302,8 +309,10 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 				<?php /* translators: 1: step, 2: steps in all. */ ?>
 				<div class="q-kicker"><?php echo esc_html( sprintf( __( 'Step %1$d of %2$d', 'quissly-for-woocommerce' ), 3, 3 ) ); ?></div>
 				<h2><?php esc_html_e( 'Go live', 'quissly-for-woocommerce' ); ?></h2>
-				<p class="q-desc"><?php esc_html_e( 'Your catalog is on its way to Quissly. Once it is ready, Finish Setup switches Quissly search on for your shoppers - or save now and switch it on later.', 'quissly-for-woocommerce' ); ?></p>
+				<?php /* What is left for the merchant, in one sentence (quissly-setup.js follows the status). */ ?>
+				<p class="q-desc" data-q-intro><?php esc_html_e( 'We\'re setting up your account - usually about a minute. Then your products are sent to Quissly.', 'quissly-for-woocommerce' ); ?></p>
 				<ul class="q-golive-list">
+					<?php if ( $quissly_search ) : ?>
 					<li><span class="q-disc" aria-hidden="true"></span><div>
 						<?php esc_html_e( 'Quissly answers your store\'s search', 'quissly-for-woocommerce' ); ?>
 						<span><?php esc_html_e( 'Your theme still shows the results, as it does today.', 'quissly-for-woocommerce' ); ?></span>
@@ -312,6 +321,13 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 						<?php esc_html_e( 'Your own search stays as the safety net', 'quissly-for-woocommerce' ); ?>
 						<span><?php esc_html_e( 'If Quissly ever cannot answer, WooCommerce\'s search does.', 'quissly-for-woocommerce' ); ?></span>
 					</div></li>
+					<?php endif; ?>
+					<?php if ( $quissly_chat ) : ?>
+					<li><span class="q-disc" aria-hidden="true"></span><div>
+						<?php esc_html_e( 'Your AI shopping assistant joins your store', 'quissly-for-woocommerce' ); ?>
+						<span><?php esc_html_e( 'It finds your products through Quissly search.', 'quissly-for-woocommerce' ); ?></span>
+					</div></li>
+					<?php endif; ?>
 					<li><span class="q-disc" aria-hidden="true"></span><div>
 						<?php esc_html_e( 'Everything else is in Configuration', 'quissly-for-woocommerce' ); ?>
 						<span><?php esc_html_e( 'Chat, voice and image search, and the search bar.', 'quissly-for-woocommerce' ); ?></span>
@@ -321,30 +337,35 @@ $quissly_store_name = Quissly_Setup_Input::suggestName( Quissly_Wizard::store_di
 			</div>
 			<div class="q-card q-card--warm">
 				<div class="q-status-head">
-					<div class="q-kicker q-kicker--quiet"><?php esc_html_e( 'Quissly account setup', 'quissly-for-woocommerce' ); ?></div>
+					<div class="q-kicker q-kicker--quiet"><?php esc_html_e( 'Account setup', 'quissly-for-woocommerce' ); ?></div>
 					<span class="q-chip" data-q-chip><?php esc_html_e( 'Setting up...', 'quissly-for-woocommerce' ); ?></span>
 				</div>
-				<p class="q-status-body"><?php esc_html_e( 'Running in the background. Finish Setup unlocks when it is done - you can keep working on the left.', 'quissly-for-woocommerce' ); ?></p>
+				<p class="q-status-body" data-q-status-body><?php esc_html_e( 'We do this part for you - nothing to click. This page updates by itself.', 'quissly-for-woocommerce' ); ?></p>
+				<?php /* The raw problem is for support, not the merchant's main message. */ ?>
+				<details class="q-details" data-q-technical hidden>
+					<summary><?php esc_html_e( 'Technical details', 'quissly-for-woocommerce' ); ?></summary>
+					<p data-q-technical-text></p>
+				</details>
 				<ol class="q-rows">
 					<?php foreach ( $quissly_rows as $quissly_key => $quissly_label ) : ?>
-						<li class="q-row" data-q-row="<?php echo esc_attr( $quissly_key ); ?>" data-state="pending">
+						<li class="q-row" data-q-row="<?php echo esc_attr( $quissly_key ); ?>" data-state="pending"<?php echo ( 'qchat' === $quissly_key && ! $quissly_chat && ! empty( $services ) ) ? ' hidden' : ''; ?>>
 							<span class="q-disc" aria-hidden="true"></span>
 							<span class="q-row__label"><?php echo esc_html( $quissly_label ); ?> <small data-q-row-detail hidden></small></span>
-							<span class="q-row__state" data-q-row-state><?php esc_html_e( 'Waiting', 'quissly-for-woocommerce' ); ?></span>
+							<span class="q-row__state" data-q-row-state><?php esc_html_e( 'Pending', 'quissly-for-woocommerce' ); ?></span>
 						</li>
 					<?php endforeach; ?>
 				</ol>
 				<p class="q-status-foot">
-					<button type="button" class="q-btn q-btn--quiet q-btn--small" data-q-retry hidden><?php esc_html_e( 'Start the sync again', 'quissly-for-woocommerce' ); ?></button>
-					<?php esc_html_e( 'Usually a few minutes. This page updates itself - no refresh needed.', 'quissly-for-woocommerce' ); ?>
+					<button type="button" class="q-btn q-btn--quiet q-btn--small" data-q-retry hidden><?php esc_html_e( 'Start the import again', 'quissly-for-woocommerce' ); ?></button>
+					<span data-q-status-foot><?php esc_html_e( 'This page updates itself - no refresh needed.', 'quissly-for-woocommerce' ); ?></span>
 				</p>
 			</div>
 		</div>
 		<div class="q-actionbar">
-			<button type="button" class="q-btn q-btn--quiet" data-q-back="plan"><?php esc_html_e( 'Back', 'quissly-for-woocommerce' ); ?></button>
-			<span class="q-actionbar__note"><?php esc_html_e( 'Finish Setup unlocks when background setup completes.', 'quissly-for-woocommerce' ); ?></span>
-			<?php /* The Shopify app's "Save changes": done for now, QSearch switched on later. */ ?>
-			<button type="button" class="q-btn q-btn--quiet" data-q-save hidden disabled><?php esc_html_e( 'Save changes', 'quissly-for-woocommerce' ); ?></button>
+			<?php /* No Back: the plan is chosen by now and is changed in Billing once setup is finished. */ ?>
+			<span class="q-actionbar__note" data-q-golive-note><?php esc_html_e( 'Finish unlocks when account setup completes.', 'quissly-for-woocommerce' ); ?></span>
+			<?php /* The Shopify app's "Do this later": done for now, Quissly switched on later. */ ?>
+			<button type="button" class="q-btn q-btn--quiet" data-q-save hidden disabled><?php esc_html_e( 'Do this later', 'quissly-for-woocommerce' ); ?></button>
 			<button type="button" class="q-btn" data-q-finish disabled><?php esc_html_e( 'Finish Setup', 'quissly-for-woocommerce' ); ?></button>
 		</div>
 	</section>

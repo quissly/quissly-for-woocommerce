@@ -72,6 +72,11 @@ class Quissly_Settings {
 			// only way, besides QUISSLY_ENV, to select demo/test (no WP type maps to those).
 			'quissly_environment'             => array( 'default' => '', 'type' => 'text' ),
 			'quissly_preserve_on_uninstall'   => array( 'default' => false, 'type' => 'bool' ),
+			// Most loved products in the search overlay (Quissly_Most_Loved): on/off, the 8 shown
+			// and the 4 backups, product ids in the merchant's order.
+			'quissly_most_loved'              => array( 'default' => false, 'type' => 'bool' ),
+			'quissly_most_loved_shown'        => array( 'default' => array(), 'type' => 'product_ids', 'max' => 8 ),
+			'quissly_most_loved_backups'      => array( 'default' => array(), 'type' => 'product_ids', 'max' => 4 ),
 			// How often the plugin checks for a new release (Quissly_Updater::interval()).
 			'quissly_update_check_every'      => array( 'default' => 1800, 'type' => 'update_every' ),
 		);
@@ -167,6 +172,8 @@ class Quissly_Settings {
 				return self::sanitize_lines_by_language( $raw );
 			case 'update_every':
 				return Quissly_Updater::sanitize_interval( $raw );
+			case 'product_ids':
+				return self::sanitize_product_ids( $raw, (int) ( $schema[ $key ]['max'] ?? 0 ) );
 			case 'text':
 			default:
 				return sanitize_text_field( (string) $raw );
@@ -256,6 +263,25 @@ class Quissly_Settings {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Product ids: positive integers, each once, in the given order, at most $max. Pure.
+	 *
+	 * @param mixed $value Raw (an array of ids).
+	 * @param int   $max   At most this many (0 = no limit).
+	 * @return int[]
+	 */
+	public static function sanitize_product_ids( $value, $max ) {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $id ) {
+			$id = is_numeric( $id ) ? (int) $id : 0;
+			if ( $id > 0 && ! in_array( $id, $out, true ) ) {
+				$out[] = $id;
+			}
+		}
+
+		return $max > 0 ? array_slice( $out, 0, $max ) : $out;
 	}
 
 	/**

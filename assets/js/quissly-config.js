@@ -267,7 +267,8 @@
 		if (!$ || !$.fn || !$.fn.selectWoo) {
 			return;
 		}
-		Array.prototype.forEach.call(document.querySelectorAll('.quissly-config select'), function (select) {
+		// WooCommerce's product search (Most loved) is set up by WooCommerce itself.
+		Array.prototype.forEach.call(document.querySelectorAll('.quissly-config select:not(.wc-product-search)'), function (select) {
 			var longest = 0;
 			Array.prototype.forEach.call(select.options, function (option) {
 				longest = Math.max(longest, option.textContent.length);

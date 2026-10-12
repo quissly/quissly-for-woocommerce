@@ -99,6 +99,7 @@ final class Quissly_Plugin {
 			'frontend/class-quissly-assets.php',
 			'widgets/class-quissly-qchat.php',
 			'frontend/class-quissly-chat-cart.php',
+			'includes/class-quissly-most-loved.php',
 			'includes/class-quissly-overlay.php',
 			'includes/class-quissly-event-body.php',
 			'includes/class-quissly-event-outcome.php',

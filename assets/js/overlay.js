@@ -217,12 +217,19 @@
 	 * @return {Element|null}
 	 */
 	function buildSuggestPanel() {
-		if ( ! config.suggestionsPanel || ! chipQueries.length ) {
+		var showChips = !! config.suggestionsPanel && chipQueries.length > 0;
+		var loved = Array.isArray( config.mostLoved ) ? config.mostLoved : [];
+		if ( ! showChips && ! loved.length ) {
 			return null;
 		}
 		var ns = 'http://www.w3.org/2000/svg';
 		var section = document.createElement( 'section' );
 		section.className = 'quissly-overlay__suggest';
+		if ( ! showChips ) {
+			section.setAttribute( 'aria-label', config.labelMostLoved || 'Most loved' );
+			section.appendChild( buildLoved( loved ) );
+			return section;
+		}
 
 		var title = document.createElement( 'p' );
 		title.className = 'quissly-overlay__suggest-title';
@@ -264,7 +271,86 @@
 			chips.appendChild( chip );
 		} );
 		section.appendChild( chips );
+		if ( loved.length ) {
+			section.appendChild( buildLoved( loved ) );
+		}
 		return section;
+	}
+
+	/**
+	 * "<Store> Most loved": the merchant's picked products as cards (the Shopify app's) - image,
+	 * name, price, star rating and how many options. The server already left out what cannot
+	 * be bought and kept 8.
+	 *
+	 * @param {Array} items Cards: {title, url, image, price, rating, ratingCount, variants}.
+	 * @return {Element}
+	 */
+	function buildLoved( items ) {
+		var block = document.createElement( 'div' );
+		block.className = 'quissly-overlay__loved';
+		var title = document.createElement( 'p' );
+		title.className = 'quissly-overlay__loved-title';
+		title.textContent = config.labelMostLoved || 'Most loved';
+		block.appendChild( title );
+		var grid = document.createElement( 'div' );
+		grid.className = 'quissly-overlay__loved-grid';
+		items.forEach( function ( item ) {
+			var card = document.createElement( 'a' );
+			card.className = 'quissly-overlay__loved-card';
+			card.href = /^https?:\/\//i.test( String( item.url || '' ) ) ? item.url : '#';
+			var media = document.createElement( 'span' );
+			media.className = 'quissly-overlay__loved-media';
+			if ( item.image && /^https?:\/\//i.test( String( item.image ) ) ) {
+				var img = document.createElement( 'img' );
+				img.src = item.image;
+				img.alt = '';
+				img.loading = 'lazy';
+				media.appendChild( img );
+			}
+			card.appendChild( media );
+			var info = document.createElement( 'span' );
+			info.className = 'quissly-overlay__loved-info';
+			var name = document.createElement( 'span' );
+			name.className = 'quissly-overlay__loved-name';
+			name.textContent = item.title || '';
+			info.appendChild( name );
+			var meta = document.createElement( 'span' );
+			meta.className = 'quissly-overlay__loved-meta';
+			var price = document.createElement( 'span' );
+			price.className = 'quissly-overlay__loved-price';
+			price.textContent = item.price || '';
+			meta.appendChild( price );
+			var rating = Number( item.rating );
+			if ( rating > 0 ) {
+				var rate = document.createElement( 'span' );
+				rate.className = 'quissly-overlay__loved-rating';
+				rate.setAttribute( 'aria-label', String( config.labelRating || '%s out of 5' ).replace( '%s', rating.toFixed( 1 ) ) );
+				var stars = document.createElement( 'span' );
+				stars.className = 'quissly-overlay__loved-stars';
+				stars.setAttribute( 'aria-hidden', 'true' );
+				stars.textContent = '★★★★★';
+				var filled = document.createElement( 'span' );
+				filled.style.width = Math.min( 100, ( rating / 5 ) * 100 ) + '%';
+				filled.textContent = '★★★★★';
+				stars.appendChild( filled );
+				rate.appendChild( stars );
+				if ( Number( item.ratingCount ) > 0 ) {
+					rate.appendChild( document.createTextNode( '(' + Number( item.ratingCount ) + ')' ) );
+				}
+				meta.appendChild( rate );
+			}
+			info.appendChild( meta );
+			if ( item.variants ) {
+				var variants = document.createElement( 'span' );
+				variants.className = 'quissly-overlay__loved-variants';
+				variants.textContent = item.variants;
+				info.appendChild( variants );
+			}
+			card.appendChild( info );
+			grid.appendChild( card );
+		} );
+		block.appendChild( grid );
+		return block;
 	}
 
 	/** The suggestions show while the bar is empty; typing hands the space to Quick. */
