@@ -4,6 +4,8 @@ Tags: woocommerce, search, ai search, autocomplete, product discovery
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
+WC requires at least: 8.0
+WC tested up to: 11.2
 Stable tag: 1.0.13
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -52,8 +54,8 @@ for the analytics in the Quissly Admin Panel: product ids, quantities, prices an
 totals with the visitor id above - never a name, email address, postal address or IP address. Nothing is recorded for a visitor who has not consented to
 statistics cookies (WP Consent API).
 
-A Quissly account (managed at admin.quissly.com) is required. The plugin is free and
-GPL-licensed; Quissly the service is the paid product.
+Quissly Setup creates your Quissly account for you - nothing to copy or paste. The plugin is free
+and GPL-licensed; Quissly the service is the paid product (the free search plan starts at once).
 
 == Installation ==
 
@@ -76,6 +78,12 @@ On a store with several languages, Search Examples and Search Suggestions have a
 
 Click Save Changes at the bottom of the page to keep your changes.
 
+The Quissly menu also has:
+
+* Dashboard - whether Quissly answers your store's search, the catalog sync, which features are on, and the sync log (which also says when the plugin updated, or why an update could not arrive).
+* Quissly Admin Panel - Quissly's own console, signed in for you.
+* Billing - your plans and this month's usage, invoices, plan changes, extra requests, automatic top-up, cancelling and refunds. Every charge is shown before you confirm it; payments go through Paddle, never through WooCommerce.
+
 == Updates ==
 
 The plugin updates itself. Every 30 minutes it checks the [plugin's GitHub releases](https://github.com/quissly/quissly-for-woocommerce/releases) for a newer version, and WordPress installs it in the background with its own updater - the same one that updates plugins from WordPress.org, including putting the previous version back if the new one fails to load. Every release is signed by Quissly, and the plugin installs only a download whose signature checks out - a zip without it is refused, whoever published it. Your settings, connection and catalog sync are kept.
@@ -83,6 +91,24 @@ The plugin updates itself. Every 30 minutes it checks the [plugin's GitHub relea
 You can change how often it checks under Quissly > Configuration > Advanced > Update check frequency: from every 30 minutes to once a day, or Never - then nothing is installed automatically and a new version waits on the Plugins page for "Update now". WordPress only runs its background tasks when someone visits the site, so a quiet site checks on its next visit.
 
 WordPress installs updates in the background only where it can write the plugin's files itself (no FTP credentials needed) and automatic updates are not switched off for the site (`AUTOMATIC_UPDATER_DISABLED`). A site under version control (git) is not updated automatically - install the new release from its zip there.
+
+== Frequently Asked Questions ==
+
+= Does it need a server cron job? =
+
+No. It uses WordPress's own scheduler, which runs when someone visits the site. A site with no visitors (for example a test site on a laptop) sends product changes and checks for updates on its next visit.
+
+= How do I see whether Quissly answered a search? =
+
+Add `?quissly_debug=1` to a search page's address. A small badge, shown only with that parameter, says whether Quissly or WooCommerce answered and why Quissly stepped aside.
+
+= Does a filtered search use Quissly? =
+
+When a shopper uses your theme's filters (category, price, attributes), WooCommerce's own search answers, so the filter is always respected. Without a filter, Quissly answers and its order is kept.
+
+= How do I switch it off? =
+
+Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
 
