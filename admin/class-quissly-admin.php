@@ -342,6 +342,7 @@ class Quissly_Admin {
 			return;
 		}
 
+		Quissly_Plan_Gate::refresh( true );
 		echo '<div class="wrap quissly-config">';
 		echo '<h1>' . esc_html__( 'Quissly Configuration', 'quissly-for-woocommerce' ) . '</h1>';
 		$this->print_flash();
@@ -599,6 +600,8 @@ class Quissly_Admin {
 			'fields'
 		);
 		echo '</div></td></tr>';
+		// "Your recent searches" beside the buttons: the shopper's own, kept in their browser.
+		$this->toggle_row( 'quissly_overlay_recent', __( 'Show recent searches', 'quissly-for-woocommerce' ), __( "The shopper's last 5 searches under the empty search bar, kept only in their own browser and never sent anywhere. Off: none are shown or kept. On by default.", 'quissly-for-woocommerce' ) );
 	}
 
 	/**
@@ -994,7 +997,11 @@ class Quissly_Admin {
 				}
 			}
 		}
+		$locked = Quissly_Plan_Gate::locked();
 		foreach ( Quissly_Settings::schema() as $key => $def ) {
+			if ( isset( $locked[ $key ] ) ) {
+				continue; // Not in the plan: drawn disabled, posts nothing - what was saved stays.
+			}
 			if ( 'bool' === $def['type'] ) {
 				Quissly_Settings::update( $key, isset( $_POST[ $key ] ) ? '1' : '0' );
 			} elseif ( isset( $_POST[ $key ] ) ) {
@@ -1124,7 +1131,11 @@ class Quissly_Admin {
 	public function handle_save_dashboard() {
 		$this->verify( 'quissly_dashboard' );
 
+		$locked = Quissly_Plan_Gate::locked();
 		foreach ( array( 'quissly_enable_search', 'quissly_enable_overlay', 'quissly_enable_quick', 'quissly_enable_voice', 'quissly_enable_image', 'quissly_enable_qchat', 'quissly_enable_events' ) as $key ) {
+			if ( isset( $locked[ $key ] ) ) {
+				continue; // Not in the plan: what was saved stays.
+			}
 			Quissly_Settings::update( $key, isset( $_POST[ $key ] ) ? '1' : '0' );
 		}
 
@@ -1258,8 +1269,15 @@ class Quissly_Admin {
 	 */
 	private function toggle_row( $key, $label, $help = '' ) {
 		$checked = Quissly_Settings::get( $key ) ? ' checked' : '';
+		// Not in the store's plan (Quissly_Plan_Gate): off and disabled - a disabled field posts
+		// nothing, and the save handlers leave it as it was saved.
+		$locked   = Quissly_Plan_Gate::locked()[ $key ] ?? '';
+		$disabled = '' !== $locked ? ' disabled' : '';
 		echo '<tr><th scope="row">' . esc_html( $label ) . '</th><td>';
-		echo '<label><input type="checkbox" name="' . esc_attr( $key ) . '" value="1"' . $checked . ' /> ' . esc_html__( 'Enabled', 'quissly-for-woocommerce' ) . '</label>';
+		echo '<label><input type="checkbox" name="' . esc_attr( $key ) . '" value="1"' . $checked . $disabled . ' /> ' . esc_html__( 'Enabled', 'quissly-for-woocommerce' ) . '</label>';
+		if ( '' !== $locked ) {
+			echo '<p class="description quissly-plan-locked">' . esc_html( Quissly_Plan_Gate::reason( $locked ) ) . ' <a href="' . esc_url( admin_url( 'admin.php?page=' . self::PAGE_BILLING ) ) . '">' . esc_html__( 'Add it in Billing', 'quissly-for-woocommerce' ) . '</a></p>';
+		}
 		if ( '' !== $help ) {
 			echo '<p class="description">' . esc_html( $help ) . '</p>';
 		}

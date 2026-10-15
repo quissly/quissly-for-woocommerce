@@ -132,6 +132,7 @@ class Quissly_Billing extends Quissly_Setup {
 
 			case 'check':
 				$subscriptions = $this->billing->subscriptions();
+				Quissly_Plan_Gate::remember( $subscriptions, time() );
 				$active        = null !== $subscriptions && isset( $this->billing->live_plans( $subscriptions )[ $family ] );
 				if ( $active ) {
 					self::flash( __( 'Payment received - your plan is on.', 'quissly-for-woocommerce' ) );
@@ -421,6 +422,7 @@ class Quissly_Billing extends Quissly_Setup {
 		}
 		$plans         = $this->billing->plans();
 		$subscriptions = $this->billing->subscriptions();
+		Quissly_Plan_Gate::remember( $subscriptions, time() );
 		if ( null === $plans || null === $subscriptions ) {
 			return null;
 		}

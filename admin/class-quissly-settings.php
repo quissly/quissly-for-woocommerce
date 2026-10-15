@@ -59,6 +59,7 @@ class Quissly_Settings {
 			'quissly_overlay_mount_selector'  => array( 'default' => '', 'type' => 'text' ),
 			// The search bar suggestions as buttons under the overlay's bar (on by default).
 			'quissly_overlay_suggestions'     => array( 'default' => true, 'type' => 'bool' ),
+			'quissly_overlay_recent'          => array( 'default' => true, 'type' => 'bool' ),
 			// Which ones (the Shopify app's "Search suggestions" setting): what Quissly generated
 			// (automatic) or the merchant's own list, one per line (manual).
 			'quissly_overlay_suggestions_mode'   => array( 'default' => 'automatic', 'type' => 'suggestions_mode' ),
@@ -105,6 +106,11 @@ class Quissly_Settings {
 		$value   = get_option( $key, $default );
 
 		if ( 'bool' === $schema[ $key ]['type'] ) {
+			// A switch the store's plan leaves out is off whatever was saved (Quissly_Plan_Gate).
+			if ( class_exists( 'Quissly_Plan_Gate', false ) && isset( Quissly_Plan_Gate::locked()[ $key ] ) ) {
+				return false;
+			}
+
 			return self::sanitize_bool( $value );
 		}
 
@@ -201,6 +207,7 @@ class Quissly_Settings {
 				'quissly_catalog_attribute_choices',
 				'quissly_search_service_id',
 				'quissly_showcase_state',
+				'quissly_plan_families',
 			)
 		);
 	}

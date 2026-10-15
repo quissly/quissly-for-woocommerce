@@ -2,13 +2,15 @@
 /**
  * Plugin Name:       Quissly for WooCommerce
  * Plugin URI:        https://quissly.com/woocommerce
- * Description:        Replace native WooCommerce search with Quissly AI product discovery: semantic search, voice & image search, autocomplete, and the QChat assistant.
- * Version:           1.0.13
+ * Description:        Replace native WooCommerce search with Quissly AI product discovery: semantic search, voice & image search, autocomplete, and the QChat assistant. Works with WooCommerce 8.0+, WordPress 6.5+ and PHP 7.4+.
+ * Version:           1.0.14
  * Author:            Quissly
  * Author URI:        https://quissly.com
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Requires Plugins:  woocommerce
+ * WC requires at least: 8.0
+ * WC tested up to:     11.2
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       quissly-for-woocommerce
@@ -22,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'QUISSLY_VERSION', '1.0.13' );
+define( 'QUISSLY_VERSION', '1.0.14' );
 define( 'QUISSLY_PLUGIN_FILE', __FILE__ );
 define( 'QUISSLY_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'QUISSLY_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

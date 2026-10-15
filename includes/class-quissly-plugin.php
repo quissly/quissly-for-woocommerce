@@ -66,6 +66,7 @@ final class Quissly_Plugin {
 			'api/class-quissly-mock-provisioner-client.php',
 			'api/class-quissly-panel-session.php',
 			'api/class-quissly-store-billing.php',
+			'includes/class-quissly-plan-gate.php',
 			'api/interface-quissly-service-directory-client.php',
 			'api/class-quissly-live-service-directory-client.php',
 			'api/class-quissly-mock-service-directory-client.php',
@@ -161,6 +162,8 @@ final class Quissly_Plugin {
 		( new Quissly_Showcase_Runner() )->register();
 		// The search service's id, looked up in the background once the store is connected.
 		Quissly_Search_Suggestions::register();
+		// What the store's plan includes, asked again every 10 minutes (Quissly_Plan_Gate).
+		( new Quissly_Plan_Gate() )->register();
 
 		// Dev/offline: route catalog batches to the recording mock (NO live call), matching
 		// the search/quick seams. Live scripts/tests remove this filter to exercise the real

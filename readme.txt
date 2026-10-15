@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.13
+Stable tag: 1.0.14
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,6 +26,7 @@ When a shopper opens search, Quissly can also help them start:
 
 * Search Examples - example searches typed letter by letter into the empty search bar.
 * Search Suggestions - buttons under the empty search bar; a click searches for it.
+* Your recent searches - the shopper's own last 5 searches beside them, kept only in their browser.
 
 Quissly creates both from your catalog after the first sync, and you can edit them in
 Quissly > Configuration. You can also pick your Most loved products, shown under them as product
@@ -69,10 +70,12 @@ Quissly > Configuration has six sections; click a title to open it.
 
 * Features - switch search, the search overlay, Quick results, voice and image search, QChat and shopping analytics on or off.
 * Search Examples - the example searches typed into the empty search bar: switch them on or off and edit the list. "Reset to generated" brings back the list Quissly made from your catalog.
-* Search Suggestions - the buttons under the empty search bar: Automatic (Quissly picks them from your catalog) or Manual (you type up to 10).
+* Search Suggestions - the buttons under the empty search bar: Automatic (Quissly picks them from your catalog) or Manual (you type up to 10), and "Show recent searches" (on by default).
 * Most Loved Products - pick 8 products to show when search opens, and 4 backups: when a shown product is out of stock, the first available backup takes its place. Shown only once 12 different products are picked and 8 of them are in stock.
 * Catalog data - which product attributes are sent to Quissly, so a search can match them.
 * Advanced - your theme's search box (only if Quissly does not find it by itself), whether your settings are kept when the plugin is deleted, and how often the plugin checks for updates.
+
+A feature your plan does not include - the chat on a Search plan, or search on a Chat plan - is shown off and greyed out with a link to Billing, and stays off on your shop until you add it. Your setting is kept for then.
 
 On a store with several languages, Search Examples and Search Suggestions have a Language select: each language can have its own list, and a language without one uses your main language's.
 
@@ -111,6 +114,12 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.14 =
+* Added: "Your recent searches" - when search opens, the shopper's last 5 searches show beside the suggestions, each with a bin to remove it. Kept only in the shopper's own browser; switch it off in Configuration > Search Suggestions.
+* Changed: the search bar looks like Quissly's other apps - one white panel near the top of the page, a small x that clears the text, and Escape or a click outside to close it.
+* Changed: a feature your plan does not include is shown greyed out with a link to Billing, and stays off on your shop until you add it.
+* Fixed: on a store with WPML, some products were sent to Quissly with the address and categories of another language, so the chat could link to the wrong language's page. Products are now always sent in their own language.
 
 = 1.0.13 =
 * Changed: no change in how the plugin works - a release that checks automatic updates.

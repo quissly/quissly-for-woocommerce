@@ -376,6 +376,7 @@ class Quissly_Setup {
 
 		if ( 'check' === $op || 'keep' === $op ) {
 			$subscriptions = $billing->subscriptions();
+			Quissly_Plan_Gate::remember( $subscriptions, time() );
 			if ( null === $subscriptions ) {
 				wp_send_json( array( 'ok' => false, 'message' => $billing->message( 0, '' ) ) );
 			}

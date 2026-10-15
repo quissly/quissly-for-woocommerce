@@ -509,7 +509,16 @@ class Quissly_Sync_Worker {
 			return null;
 		}
 
-		return Quissly_Product_Mapper::map( $this->extract( $product ) );
+		// WPML answers a post's link and terms in the CURRENT request's language, and the sync runs
+		// from whichever request comes first: one started on a second-language page sent main-language
+		// products with that language's URLs and categories. So each record is built in its product's
+		// own language.
+		return Quissly_Languages::in_language(
+			Quissly_Languages::language_of( (int) $product_id ),
+			function () use ( $product ) {
+				return Quissly_Product_Mapper::map( $this->extract( $product ) );
+			}
+		);
 	}
 
 	/**
