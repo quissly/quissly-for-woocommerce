@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.16
+Stable tag: 1.0.17
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,10 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.17 =
+* New: "Search overlay layout" under Features - Wide (the default) spans the screen and shows Most loved in four columns; Center is the compact panel in the middle. Phones look the same either way.
+* Fixed: in the centred panel, Most loved shows six cards of the same size in three columns instead of cutting one off.
 
 = 1.0.16 =
 * Fixed: the example searches Quissly made from your catalog are typed into the search bar from the start, even if the list was saved empty before they were made - no need to press "Reset to generated" first. Configuration shows the same list.

@@ -365,6 +365,13 @@ class Quissly_Admin {
 		$this->section_open( 'features', __( 'Features', 'quissly-for-woocommerce' ), true );
 		$this->toggle_row( 'quissly_enable_search', __( 'Enable QSearch', 'quissly-for-woocommerce' ), __( 'Quissly answers your store\'s searches. Search interception activates only after the first full catalog sync completes.', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_overlay', __( 'Search overlay takes over the theme\'s search box', 'quissly-for-woocommerce' ), __( 'When on, clicking the theme\'s search box opens a full-width search bar at the top of a blurred page, with Quick\'s suggestions under it when Quick is on. Presentation only - results are unaffected. If your theme has no search box at all, Quissly adds a search button whatever this is set to; the mount point below says where it goes.', 'quissly-for-woocommerce' ) );
+		$overlay_layout = Quissly_Settings::get( 'quissly_overlay_layout' );
+		echo '<tr><th scope="row"><label for="quissly_overlay_layout">' . esc_html__( 'Search overlay layout', 'quissly-for-woocommerce' ) . '</label></th><td>';
+		echo '<select name="quissly_overlay_layout" id="quissly_overlay_layout">';
+		echo '<option value="wide"' . selected( $overlay_layout, 'wide', false ) . '>' . esc_html__( 'Wide - spans the screen', 'quissly-for-woocommerce' ) . '</option>';
+		echo '<option value="center"' . selected( $overlay_layout, 'center', false ) . '>' . esc_html__( 'Center - a compact panel', 'quissly-for-woocommerce' ) . '</option>';
+		echo '</select>';
+		echo '<p class="description">' . esc_html__( 'Wide spans the screen and shows products in columns. Center is a compact panel in the middle of the screen. Phones look the same either way.', 'quissly-for-woocommerce' ) . '</p></td></tr>';
 		$this->text_row( 'quissly_overlay_mount_selector', __( 'Search button mount point', 'quissly-for-woocommerce' ), __( 'Only used when your theme has no search box. A CSS selector for an existing header control - your cart, account or language switcher - and the search button is placed just to its left. Leave empty to auto-detect: the cart, then the account link, then the language switcher, else a floating button at the bottom-left. Example: .site-header-cart', 'quissly-for-woocommerce' ) );
 
 		$this->toggle_row( 'quissly_enable_quick', __( 'Quick Recommendations', 'quissly-for-woocommerce' ), __( 'As a shopper types, show recommended products straight away in a dropdown under the search box, so they can jump to an item without running a full search.', 'quissly-for-woocommerce' ) );

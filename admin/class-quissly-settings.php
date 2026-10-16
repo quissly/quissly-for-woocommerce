@@ -57,6 +57,8 @@ class Quissly_Settings {
 			// Quissly_Overlay's docblock.
 			'quissly_enable_overlay'          => array( 'default' => true, 'type' => 'bool' ),
 			'quissly_overlay_mount_selector'  => array( 'default' => '', 'type' => 'text' ),
+			// The Shopify app's "Search overlay layout": wide (spans the screen) or center (a 760px panel).
+			'quissly_overlay_layout'          => array( 'default' => 'wide', 'type' => 'overlay_layout' ),
 			// The search bar suggestions as buttons under the overlay's bar (on by default).
 			'quissly_overlay_suggestions'     => array( 'default' => true, 'type' => 'bool' ),
 			'quissly_overlay_recent'          => array( 'default' => true, 'type' => 'bool' ),
@@ -172,6 +174,8 @@ class Quissly_Settings {
 				return self::sanitize_label( $raw, $schema[ $key ]['default'] );
 			case 'suggestions_mode':
 				return 'manual' === $raw ? 'manual' : 'automatic';
+			case 'overlay_layout':
+				return 'center' === $raw ? 'center' : 'wide';
 			case 'lines':
 				return self::sanitize_lines( $raw );
 			case 'lines_by_language':
