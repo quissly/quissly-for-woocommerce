@@ -223,7 +223,59 @@ class Quissly_Proxy {
 		$rows = $this->client()->suggest( $query, 10 );
 		$rows = self::rows_in_language( $rows, Quissly_Languages::code_for( (string) $request->get_param( 'lang' ) ) );
 
-		return new WP_REST_Response( array( 'suggestions' => array_values( $rows ) ), 200 );
+		return new WP_REST_Response( array( 'suggestions' => self::hydrate_rows( $rows ) ), 200 );
+	}
+
+	/**
+	 * Quick's rows filled from WooCommerce: name, link, price and image of each product, as the
+	 * shop shows them now (the Magento plugin's SuggestionHydrator). Quissly's Quick answers ids
+	 * with empty metadata, so its own fields are only a fallback. A product that is gone or not
+	 * visible in the catalog is dropped; the order is Quissly's.
+	 *
+	 * @param array $rows Rows ({id, title, url, price, original_price, image_url}).
+	 * @return array
+	 */
+	public static function hydrate_rows( array $rows ) {
+		$out = array();
+		foreach ( $rows as $row ) {
+			$product = wc_get_product( (int) ( $row['id'] ?? 0 ) );
+			if ( ! $product instanceof WC_Product || ! $product->is_visible() ) {
+				continue;
+			}
+			$image_id = $product->get_image_id();
+			$price    = '' !== (string) $product->get_price() ? (float) wc_get_price_to_display( $product ) : null;
+			$regular  = $product->is_on_sale() && '' !== (string) $product->get_regular_price()
+				? (float) wc_get_price_to_display( $product, array( 'price' => $product->get_regular_price() ) )
+				: null;
+			if ( null !== $regular && ( null === $price || $regular <= $price ) ) {
+				$regular = null;
+			}
+			$image = $image_id ? wp_get_attachment_image_url( $image_id, 'woocommerce_thumbnail' ) : '';
+
+			$out[] = array(
+				'id'                   => $product->get_id(),
+				'title'                => $product->get_name(),
+				'url'                  => get_permalink( $product->get_id() ),
+				'price'                => null !== $price ? $price : ( $row['price'] ?? null ),
+				'original_price'       => null !== $regular ? $regular : null,
+				'image_url'            => $image ? $image : ( $row['image_url'] ?? null ),
+				// The same prices in the shop's currency format ("349,00 ₾"), for the dropdown.
+				'price_label'          => null !== $price ? self::price_label( $price ) : null,
+				'original_price_label' => null !== $regular ? self::price_label( $regular ) : null,
+			);
+		}
+
+		return $out;
+	}
+
+	/**
+	 * A price as plain text in the shop's currency format.
+	 *
+	 * @param float $amount Amount.
+	 * @return string
+	 */
+	private static function price_label( $amount ) {
+		return trim( html_entity_decode( wp_strip_all_tags( wc_price( $amount ) ), ENT_QUOTES, 'UTF-8' ) );
 	}
 
 	/**

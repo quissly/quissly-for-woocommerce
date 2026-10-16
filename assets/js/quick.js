@@ -207,13 +207,13 @@
 		var price = Number( row.price ), original = Number( row.original_price );
 		if ( row.original_price != null && ! isNaN( original ) && ! isNaN( price ) && original > price ) {
 			var del = el( 'del' );
-			del.textContent = original;
+			del.textContent = row.original_price_label || original;
 			parent.appendChild( del );
 			parent.appendChild( document.createTextNode( ' ' ) );
 		}
 		if ( row.price != null && ! isNaN( price ) ) {
 			var span = el( 'span' );
-			span.textContent = price;
+			span.textContent = row.price_label || price;
 			parent.appendChild( span );
 		}
 	}
