@@ -25,7 +25,9 @@
 	}
 
 	var resultsUrl = config.resultsUrl || '/?post_type=product';
-	var nativeInput = findNativeInput();
+	var nativeInputs = findNativeInputs();
+	// The box the shopper last used (its text carries over, its form names the results page).
+	var nativeInput = nativeInputs[0] || null;
 
 	var backdrop, panel, input, lastFocus, suggestPanel, clearBtn, recentGroup, suggestLists = null;
 	var hasStaticSuggest = false;
@@ -99,26 +101,28 @@
 	}
 
 	/**
-	 * The theme's own search input, tried in the same priority order the Quick widget
-	 * uses (config.searchSelectors — merchant-configured overrides first, then the
-	 * generic WordPress/WooCommerce priority list), or null if none is present.
+	 * Every search box the theme has, in the priority order of config.searchSelectors (a
+	 * merchant's own selector first). A theme often has one per screen size - a box behind
+	 * the header's search icon on desktop and another in the mobile menu - and taking over
+	 * only the first left the other opening the theme's own search.
 	 *
-	 * @return {Element|null}
+	 * @return {Element[]}
 	 */
-	function findNativeInput() {
-		var selectors = config.searchSelectors || [];
-		for ( var i = 0; i < selectors.length; i++ ) {
+	function findNativeInputs() {
+		var found = [];
+		( config.searchSelectors || [] ).forEach( function ( selector ) {
 			try {
-				var el = document.querySelector( selectors[ i ] );
-				if ( el ) {
-					return el;
-				}
+				[].forEach.call( document.querySelectorAll( selector ), function ( el ) {
+					if ( found.indexOf( el ) === -1 ) {
+						found.push( el );
+					}
+				} );
 			} catch ( e ) {
 				// A stored selector that's no longer valid CSS is a stale merchant setting,
 				// not a reason to stop trying the rest of the list.
 			}
-		}
-		return null;
+		} );
+		return found;
 	}
 
 	function build() {
@@ -584,11 +588,14 @@
 
 	if ( nativeInput ) {
 		// The theme has a search box: it becomes the trigger and never focuses.
-		[ 'focus', 'click' ].forEach( function ( evt ) {
-			nativeInput.addEventListener( evt, function ( e ) {
-				e.preventDefault();
-				nativeInput.blur();
-				open();
+		nativeInputs.forEach( function ( box ) {
+			[ 'focus', 'click' ].forEach( function ( evt ) {
+				box.addEventListener( evt, function ( e ) {
+					e.preventDefault();
+					nativeInput = box;
+					box.blur();
+					open();
+				} );
 			} );
 		} );
 	} else {

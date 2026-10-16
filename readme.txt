@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.14
+Stable tag: 1.0.15
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,9 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.15 =
+* Fixed: on a theme with more than one search box (for example one in the header on computers and another in the mobile menu), the Quissly search window now opens from every one of them, not only the first.
 
 = 1.0.14 =
 * Added: "Your recent searches" - when search opens, the shopper's last 5 searches show beside the suggestions, each with a bin to remove it. Kept only in the shopper's own browser; switch it off in Configuration > Search Suggestions.
