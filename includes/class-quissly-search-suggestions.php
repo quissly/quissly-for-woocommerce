@@ -283,8 +283,15 @@ class Quissly_Search_Suggestions {
 	 */
 	public static function for_storefront() {
 		$lists = self::storefront_lists();
+		if ( ! $lists['enabled'] ) {
+			return array();
+		}
+		// An empty list is nothing chosen yet, not "show nothing" (the switch hides the typing):
+		// Quissly's generated list until the merchant's own has entries. A list saved empty
+		// before anything was generated kept the typing off until "Reset to generated".
+		$picked = self::pick( $lists, Quissly_Languages::current_key(), Quissly_Languages::main_key() );
 
-		return $lists['enabled'] ? self::pick( $lists, Quissly_Languages::current_key(), Quissly_Languages::main_key() ) : array();
+		return array() !== $picked ? $picked : self::pick_generated( $lists, Quissly_Languages::current_key(), Quissly_Languages::main_key() );
 	}
 
 	/**

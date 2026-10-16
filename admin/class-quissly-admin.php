@@ -518,15 +518,22 @@ class Quissly_Admin {
 		$empty     = empty( $current['queries'] ) && ! Quissly_Showcase_Runner::finished() && Quissly_Showcase_Runner::enabled()
 			? __( 'Left empty, examples are generated from your catalog after the first catalog sync - each one checked to find products.', 'quissly-for-woocommerce' )
 			: __( 'No suggestions yet. The bar shows "Search products…".', 'quissly-for-woocommerce' );
+		// An empty list shows what the storefront types instead (for_storefront()): the generated
+		// one - another language without a list of its own uses the main list while that has
+		// entries. Saving then writes it to Quissly as the list.
+		$shown_by_language = $current['by_language'];
+		if ( empty( $current['queries'] ) ) {
+			$shown_by_language += array_filter( (array) $current['generated_by_language'] );
+		}
 		$this->language_lists(
 			'quissly_suggestions',
-			implode( "\n", $current['queries'] ),
+			implode( "\n", ! empty( $current['queries'] ) ? $current['queries'] : $generated ),
 			'quissly_suggestions_lang',
 			array_map(
 				static function ( $list ) {
 					return implode( "\n", $list );
 				},
-				$current['by_language']
+				$shown_by_language
 			),
 			$generated,
 			$current['generated_by_language'],
