@@ -73,8 +73,7 @@
 	background: #fff;
 }
 
-.quissly-quick--in-overlay .quissly-quick__seeall,
-.quissly-quick--in-overlay .quissly-quick__empty {
+.quissly-quick--in-overlay .quissly-quick__seeall {
 	grid-column: 1 / -1;
 }
 
@@ -121,12 +120,6 @@
 .quissly-quick__price del {
 	color: #999;
 	margin-right: 4px;
-}
-
-.quissly-quick__empty {
-	padding: 12px;
-	color: #777;
-	text-align: center;
 }
 
 .quissly-quick__seeall {

@@ -27,8 +27,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * ProductItem and does NOT inherit omitted fields from the parent (a sparse variant 422'd).
  * So the REQUIRED fields — title, description, category, images, original_price — are
  * populated on EVERY variant, copied from the parent when the variant has no own value. The
- * OPTIONAL fields — discounted_price, in_stock, and the metadata sku — stay SPARSE (emitted
- * only when they differ from the parent). /update is lenient, but this one full shape
+ * OPTIONAL fields: in_stock always (a missing one is stored as in stock), discounted_price whenever
+ * the variant is on sale (Quissly shows a variant's own price, so a sale shared with the parent
+ * must be on the variant too), the metadata sku only when it differs from the parent. /update is lenient, but this one full shape
  * satisfies both methods, so there is no separate add/update payload.
  *
  * There is NO price_range — nothing about a variant is flattened into an aggregate. The
@@ -295,8 +296,8 @@ class Quissly_Product_Mapper {
 		// names, no `variants` of its own). The REQUIRED ProductItem fields (title, description,
 		// category, images, original_price) are populated on every variant — copied from the
 		// parent when the variant has no own value — because /add does NOT inherit them
-		// (the live API answers 422). The OPTIONAL fields (discounted_price, in_stock, sku) stay
-		// SPARSE: emitted only when they differ from the parent.
+		// (the live API answers 422). The OPTIONAL fields: in_stock always, discounted_price whenever
+		// the variant is on sale, sku only when it differs from the parent.
 		$variants = array();
 		foreach ( $rows as $row ) {
 			$effective_regular = ( null !== $row['own_regular'] ) ? $row['own_regular'] : $parent_regular;
@@ -320,12 +321,16 @@ class Quissly_Product_Mapper {
 				// default variation (same fix as the Magento plugin).
 				'url'            => ( null !== $row['own_url'] ) ? $row['own_url'] : $parent_url,
 			);
-			if ( null !== $row['own_sale'] && $row['own_sale'] !== $parent_sale ) {
+			// Its sale price whenever it is on sale - also when the parent's is the same: Quissly
+			// keeps each variant as a record of its own and shows its own price.
+			// WooCommerce prices a variation by its own sale price only (a variable parent's
+			// _sale_price is not passed down - it can be a stale one from before it was variable).
+			if ( null !== $row['own_sale'] ) {
 				$entry['discounted_price'] = $row['own_sale'];
 			}
-			if ( $row['in_stock'] !== $rollup_in_stock ) {
-				$entry['in_stock'] = $row['in_stock'];
-			}
+			// Always its own: a variant without in_stock is stored as in stock (the API's default), so a
+			// product sold out in every variation showed each one as available.
+			$entry['in_stock'] = $row['in_stock'];
 			// Non-documented per-variant fields go in the variant's own metadata: the concrete
 			// attribute values (color/size/logo), the sku (when it differs from the parent), and
 			// selected_options — the [{name,value}] form the backend uses to build attribute

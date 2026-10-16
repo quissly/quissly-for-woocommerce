@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.19
+Stable tag: 1.0.20
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,10 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.20 =
+* Fixed: when Quick Recommendations find nothing, no empty card is shown under the search bar.
+* Fixed: every variation is sent with its own stock, so a product sold out in every variation is no longer shown as available, and with its own sale price whenever it is on sale.
 
 = 1.0.19 =
 * Fixed: Billing's confirmation dialog title and the automatic top-up checkbox keep their own look, whatever the admin theme styles headings and labels with.

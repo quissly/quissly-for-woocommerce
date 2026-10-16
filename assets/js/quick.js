@@ -224,10 +224,11 @@
 		rows = [];
 		activeRow = -1;
 
+		// Nothing found: no card at all (as the Magento plugin's Quick) - an empty one under the bar
+		// reads as results still loading. Enter still runs the search.
 		if ( ! suggestions || ! suggestions.length ) {
-			var empty = el( 'div', 'quissly-quick__empty' );
-			empty.textContent = '—';
-			dropdown.appendChild( empty );
+			hide();
+			return;
 		} else {
 			suggestions.slice( 0, CFG.maxRows || 10 ).forEach( function ( s ) {
 				var row = el( 'a', 'quissly-quick__row' );
