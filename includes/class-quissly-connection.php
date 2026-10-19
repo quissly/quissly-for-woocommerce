@@ -113,6 +113,19 @@ class Quissly_Connection {
 
 		$code = (int) $res['code'];
 		$ok   = 200 === $code;
+		if ( $ok ) {
+			Quissly_Refusal::clear();
+		} elseif ( Quissly_Refusal::is_refusal( $code ) ) {
+			// Why, by status and in Quissly's words - a 403 is usually no plan, not a bad key.
+			$detail = Quissly_Refusal::detail( $res['body'] );
+			Quissly_Refusal::record( $code, $detail );
+			return array(
+				'ok'         => false,
+				'configured' => true,
+				'code'       => $code,
+				'message'    => Quissly_Refusal::text( $code, $detail ),
+			);
+		}
 
 		return array(
 			'ok'         => $ok,

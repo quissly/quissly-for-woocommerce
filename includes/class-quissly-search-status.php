@@ -22,15 +22,18 @@ class Quissly_Search_Status {
 	 * Evaluate the status from explicit flags. PURE.
 	 *
 	 * Order mirrors register_search()'s short-circuits: mock first (it forces interception
-	 * with canned results), then the gate, then the toggle, then connectivity.
+	 * with canned results), then the gate, then the toggle, then connectivity, then whether
+	 * Quissly refuses the store's searches (Quissly_Refusal: it said Active while every search
+	 * was refused and fell back to WooCommerce's).
 	 *
-	 * @param bool $mock      QUISSLY_USE_MOCK_SEARCH is on.
-	 * @param bool $gate      First sync complete (interception gate open).
-	 * @param bool $toggle    quissly_enable_search is on.
-	 * @param bool $connected API key + bearer token present.
+	 * @param bool       $mock      QUISSLY_USE_MOCK_SEARCH is on.
+	 * @param bool       $gate      First sync complete (interception gate open).
+	 * @param bool       $toggle    quissly_enable_search is on.
+	 * @param bool       $connected API key + bearer token present.
+	 * @param array|null $refusal   Quissly's last refusal of the store's searches (Quissly_Refusal::get()).
 	 * @return array{state:string,code:string,label:string,detail:string,mock:bool}
 	 */
-	public static function compute( $mock, $gate, $toggle, $connected ) {
+	public static function compute( $mock, $gate, $toggle, $connected, $refusal = null ) {
 		if ( $mock ) {
 			return array(
 				'state'  => 'mock',
@@ -67,6 +70,15 @@ class Quissly_Search_Status {
 				'detail' => __( 'Not connected — add your API key and bearer token. Search falls back to native until then.', 'quissly-for-woocommerce' ),
 			);
 		}
+		if ( is_array( $refusal ) ) {
+			return array(
+				'state'  => 'inactive',
+				'code'   => 'refused',
+				'mock'   => false,
+				'label'  => __( 'Inactive', 'quissly-for-woocommerce' ),
+				'detail' => Quissly_Refusal::text( (int) $refusal['status'], (string) $refusal['detail'] ) . ' ' . __( 'Searches fall back to native WooCommerce search until Quissly answers.', 'quissly-for-woocommerce' ),
+			);
+		}
 
 		return array(
 			'state'  => 'active',
@@ -89,6 +101,6 @@ class Quissly_Search_Status {
 		$toggle    = (bool) Quissly_Settings::get( 'quissly_enable_search' );
 		$connected = ( $store->has_stored_key() || $store->is_dev_override_active() ) && '' !== Quissly_Env::token();
 
-		return self::compute( $mock, $gate, $toggle, $connected );
+		return self::compute( $mock, $gate, $toggle, $connected, Quissly_Refusal::get() );
 	}
 }

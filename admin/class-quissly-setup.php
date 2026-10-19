@@ -492,6 +492,24 @@ class Quissly_Setup {
 			Quissly_Settings::update( 'quissly_enable_qchat', true );
 		}
 		update_option( Quissly_Wizard::OPT_COMPLETE, true, false );
+		// Search is switched on: one search says whether Quissly answers it, so "Search status"
+		// does not say Active for a store whose searches Quissly refuses (no plan it knows of -
+		// a plan chosen for manual invoice; found testing the CS-Cart add-on, 2026-10-19).
+		$probe = Quissly_Settings::get( 'quissly_enable_search' ) ? Quissly_Connection::probe() : null;
+		if ( null !== $probe && Quissly_Refusal::is_refusal( $probe['code'] ) ) {
+			Quissly_Sync_Log::log( sprintf( 'Quissly Setup finished, but Quissly refused the first search (HTTP %d).', (int) $probe['code'] ) );
+			set_transient(
+				'quissly_flash_error_' . get_current_user_id(),
+				__( 'Setup is finished, but Quissly refused the first search, so the store keeps WooCommerce\'s search for now.', 'quissly-for-woocommerce' ) . ' ' . $probe['message'],
+				10 * MINUTE_IN_SECONDS
+			);
+			wp_send_json(
+				array(
+					'ok'       => true,
+					'redirect' => admin_url( 'admin.php?page=' . Quissly_Admin::MENU_SLUG . '&quissly_status=error' ),
+				)
+			);
+		}
 		Quissly_Sync_Log::log( 'Quissly Setup finished; ' . ( empty( $services ) ? 'qsearch' : implode( ' and ', $services ) ) . ' is live.' );
 		wp_send_json(
 			array(

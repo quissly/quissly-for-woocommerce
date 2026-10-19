@@ -53,6 +53,7 @@ final class Quissly_Plugin {
 		$components = array(
 			'includes/class-quissly-env.php',
 			'includes/class-quissly-user-id.php',
+			'includes/class-quissly-refusal.php',
 			'includes/class-quissly-connection.php',
 			'includes/class-quissly-search-status.php',
 			'api/class-quissly-signer-exception.php',

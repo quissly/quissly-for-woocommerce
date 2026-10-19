@@ -27,9 +27,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * ProductItem and does NOT inherit omitted fields from the parent (a sparse variant 422'd).
  * So the REQUIRED fields — title, description, category, images, original_price — are
  * populated on EVERY variant, copied from the parent when the variant has no own value. The
- * OPTIONAL fields: in_stock always (a missing one is stored as in stock), discounted_price whenever
- * the variant is on sale (Quissly shows a variant's own price, so a sale shared with the parent
- * must be on the variant too), the metadata sku only when it differs from the parent. /update is lenient, but this one full shape
+ * OPTIONAL fields: in_stock always (a missing one is stored as in stock), discounted_price always - the
+ * variant's own selling price, on sale or not (Quissly shows a variant's own price and sorts by
+ * price on discounted_price), the metadata sku only when it differs from the parent. /update is lenient, but this one full shape
  * satisfies both methods, so there is no separate add/update payload.
  *
  * There is NO price_range — nothing about a variant is flattened into an aggregate. The
@@ -85,7 +85,7 @@ class Quissly_Product_Mapper {
 			$variable = self::map_variations( $product );
 
 			$original_price   = $variable['from_regular'];
-			$discounted_price = $variable['from_sale'];
+			$discounted_price = $variable['from_current'];
 			$in_stock         = $variable['in_stock'];
 
 			$metadata = array_merge( $metadata, $variable['attribute_helpers'] );
@@ -93,7 +93,9 @@ class Quissly_Product_Mapper {
 			$variants                    = $variable['variants'];
 		} else {
 			$original_price   = self::to_price( $product['regular_price'] ?? null );
-			$discounted_price = self::to_price( $product['sale_price'] ?? null );
+			// Its selling price, on sale or not (the Quissly Shopify app's rule): Quissly sorts by
+			// price on discounted_price, and a record without it went last in a price sort.
+			$discounted_price = self::to_price( $product['sale_price'] ?? null ) ?? $original_price;
 			$in_stock         = ! empty( $product['in_stock'] );
 			// A simple product is a LEAF match (no child variants), so it carries
 			// metadata.selected_options built from its OWN product-level attributes — the data
@@ -114,9 +116,9 @@ class Quissly_Product_Mapper {
 			'description'      => self::description( $product ),
 			// The live catalog API (ProductItem schema) REQUIRES original_price as a number
 			// — null is rejected (verified live). Default to 0.0 when a product has no price.
-			// discounted_price remains nullable (the API accepts null = "not on sale").
+			// discounted_price is always the selling price, the same number when not on sale.
 			'original_price'   => null === $original_price ? 0.0 : (float) $original_price,
-			'discounted_price' => $discounted_price,
+			'discounted_price' => null === $discounted_price ? ( null === $original_price ? 0.0 : (float) $original_price ) : (float) $discounted_price,
 			'category'         => self::primary_category( $product ),
 			'in_stock'         => $in_stock,
 			'images'           => isset( $product['images'] ) ? array_values( $product['images'] ) : array(),
@@ -221,7 +223,6 @@ class Quissly_Product_Mapper {
 	 */
 	private static function map_variations( array $product ) {
 		$parent_regular = self::to_price( $product['regular_price'] ?? null );
-		$parent_sale    = self::to_price( $product['sale_price'] ?? null );
 		$parent_sku     = isset( $product['sku'] ) ? (string) $product['sku'] : '';
 		$parent_attrs   = self::canonical_attributes( $product['attributes'] ?? array() );
 
@@ -238,7 +239,7 @@ class Quissly_Product_Mapper {
 		$variations = $product['variations'] ?? array();
 
 		$resolved_regulars = array();
-		$resolved_sales    = array();
+		$resolved_currents = array();
 		$rollup_in_stock   = ! empty( $product['in_stock'] );
 		$attribute_values  = array(); // canonical key => list of resolved values.
 		$rows              = array(); // per-variant computed values (built into entries below).
@@ -278,9 +279,10 @@ class Quissly_Product_Mapper {
 			if ( null !== $effective_regular ) {
 				$resolved_regulars[] = $effective_regular;
 			}
-			$effective_sale = ( null !== $own_sale ) ? $own_sale : $parent_sale;
-			if ( null !== $effective_sale ) {
-				$resolved_sales[] = $effective_sale;
+			// What the variation sells for: its own sale price, else its regular price.
+			$current = ( null !== $own_sale ) ? $own_sale : $effective_regular;
+			if ( null !== $current ) {
+				$resolved_currents[] = $current;
 			}
 			if ( $own_in_stock ) {
 				$rollup_in_stock = true;
@@ -296,8 +298,8 @@ class Quissly_Product_Mapper {
 		// names, no `variants` of its own). The REQUIRED ProductItem fields (title, description,
 		// category, images, original_price) are populated on every variant — copied from the
 		// parent when the variant has no own value — because /add does NOT inherit them
-		// (the live API answers 422). The OPTIONAL fields: in_stock always, discounted_price whenever
-		// the variant is on sale, sku only when it differs from the parent.
+		// (the live API answers 422). Also always: in_stock and discounted_price (its selling price,
+		// on sale or not). The sku only when it differs from the parent.
 		$variants = array();
 		foreach ( $rows as $row ) {
 			$effective_regular = ( null !== $row['own_regular'] ) ? $row['own_regular'] : $parent_regular;
@@ -321,13 +323,11 @@ class Quissly_Product_Mapper {
 				// default variation (same fix as the Magento plugin).
 				'url'            => ( null !== $row['own_url'] ) ? $row['own_url'] : $parent_url,
 			);
-			// Its sale price whenever it is on sale - also when the parent's is the same: Quissly
-			// keeps each variant as a record of its own and shows its own price.
-			// WooCommerce prices a variation by its own sale price only (a variable parent's
-			// _sale_price is not passed down - it can be a stale one from before it was variable).
-			if ( null !== $row['own_sale'] ) {
-				$entry['discounted_price'] = $row['own_sale'];
-			}
+			// Always its own selling price, on sale or not: Quissly keeps each variant as a record of
+			// its own, shows its own price and sorts by it. WooCommerce prices a variation by its own
+			// sale price only (a variable parent's _sale_price is not passed down - it can be a stale
+			// one from before it was variable).
+			$entry['discounted_price'] = ( null !== $row['own_sale'] ) ? (float) $row['own_sale'] : $entry['original_price'];
 			// Always its own: a variant without in_stock is stored as in stock (the API's default), so a
 			// product sold out in every variation showed each one as available.
 			$entry['in_stock'] = $row['in_stock'];
@@ -347,7 +347,8 @@ class Quissly_Product_Mapper {
 
 		return array(
 			'from_regular'      => empty( $resolved_regulars ) ? null : (float) min( $resolved_regulars ),
-			'from_sale'         => empty( $resolved_sales ) ? null : (float) min( $resolved_sales ),
+			// The lowest price a shopper pays among the variations (the Shopify app's parent price).
+			'from_current'      => empty( $resolved_currents ) ? null : (float) min( $resolved_currents ),
 			'in_stock'          => $rollup_in_stock,
 			'attribute_helpers' => self::attribute_helpers( $attribute_values ),
 			'variation_count'   => count( $variations ),

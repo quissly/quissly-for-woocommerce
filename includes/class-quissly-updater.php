@@ -59,6 +59,13 @@ final class Quissly_Updater {
 	/** Why the last GitHub request failed ('' = it did not). */
 	private static $github_error = '';
 
+	/**
+	 * Why the last GitHub release was not offered (release_problem()), '' when it was.
+	 *
+	 * @var string
+	 */
+	private static $release_problem = '';
+
 	/** The plugin's slug (its folder), as WordPress's update screens name it. */
 	const SLUG = 'quissly-for-woocommerce';
 
@@ -209,6 +216,8 @@ final class Quissly_Updater {
 			// A release still being built (a minute or two after the push) is not a problem; GitHub not answering is.
 			if ( '' !== self::$github_error ) {
 				self::problem( 'Quissly ' . $hinted . ' is out, but GitHub did not answer the update check (' . self::$github_error . ').' );
+			} elseif ( '' !== self::$release_problem ) {
+				self::problem( 'Quissly ' . $hinted . ' is out, but its release on GitHub was not installed: ' . self::$release_problem . '.' );
 			}
 			return 'release_not_ready';
 		}
@@ -558,10 +567,13 @@ final class Quissly_Updater {
 				),
 			)
 		);
-		$release            = null;
-		self::$github_error = self::request_error( $response, array( 200 ) );
+		$release               = null;
+		self::$release_problem = '';
+		self::$github_error    = self::request_error( $response, array( 200 ) );
 		if ( '' === self::$github_error ) {
-			$release = self::parse_release( json_decode( (string) wp_remote_retrieve_body( $response ), true ), self::package_prefix() );
+			$json                  = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+			self::$release_problem = self::release_problem( $json, self::package_prefix() );
+			$release               = self::parse_release( $json, self::package_prefix() );
 		} elseif ( ! defined( 'QUISSLY_UPDATE_URL' ) ) {
 			// GitHub's API refused this server (60 requests an hour per IP address, shared by
 			// every site on a shared host) or did not answer: the release's files are at known
@@ -603,6 +615,47 @@ final class Quissly_Updater {
 			'signature' => $package . '.sig',
 			'notes'     => '',
 		);
+	}
+
+	/**
+	 * Why parse_release() offers nothing for a GitHub "latest release" answer ('' when it offers
+	 * it), for the sync log: a release ignored without a word looked like no release at all. Pure.
+	 *
+	 * @param mixed  $json           The decoded answer.
+	 * @param string $package_prefix What the zip's URL must start with.
+	 * @return string
+	 */
+	public static function release_problem( $json, $package_prefix ) {
+		if ( ! is_array( $json ) ) {
+			return 'GitHub answered something that is not a release';
+		}
+		if ( ! empty( $json['draft'] ) ) {
+			return 'it is a draft';
+		}
+		if ( ! empty( $json['prerelease'] ) ) {
+			return 'it is a pre-release';
+		}
+		if ( ! preg_match( '/^v?(\d+\.\d+\.\d+)$/', (string) ( $json['tag_name'] ?? '' ) ) ) {
+			return 'its tag is not a version number';
+		}
+		$names     = array();
+		$elsewhere = false;
+		foreach ( (array) ( $json['assets'] ?? array() ) as $asset ) {
+			$url = is_array( $asset ) ? (string) ( $asset['browser_download_url'] ?? '' ) : '';
+			if ( 0 === strpos( $url, $package_prefix ) ) {
+				$names[ (string) ( $asset['name'] ?? '' ) ] = true;
+			} elseif ( '' !== $url ) {
+				$elsewhere = true;
+			}
+		}
+		if ( ! isset( $names[ self::ASSET ] ) ) {
+			return $elsewhere ? "its files are not on Quissly's GitHub repository" : 'it has no ' . self::ASSET;
+		}
+		if ( ! isset( $names[ self::ASSET . '.sig' ] ) ) {
+			return $elsewhere ? "its signature is not on Quissly's GitHub repository" : 'it is not signed (no ' . self::ASSET . '.sig)';
+		}
+
+		return '';
 	}
 
 	/**

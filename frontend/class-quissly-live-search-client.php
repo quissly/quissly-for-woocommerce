@@ -57,10 +57,15 @@ class Quissly_Live_Search_Client implements Quissly_Search_Client {
 			$this->last_error = 'transport_error';
 			return null;
 		}
+		if ( Quissly_Refusal::is_refusal( $result['code'] ) ) {
+			// Quissly refuses the store (key, payment, plan): "Search status" says so.
+			Quissly_Refusal::record( $result['code'], Quissly_Refusal::detail( $result['body'] ) );
+		}
 		if ( 200 !== $result['code'] || ! is_array( $result['body'] ) ) {
 			$this->last_error = 200 !== $result['code'] ? 'http_' . (int) $result['code'] : 'bad_response';
 			return null;
 		}
+		Quissly_Refusal::clear();
 
 		return $result['body'];
 	}

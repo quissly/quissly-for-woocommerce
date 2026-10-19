@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.21
+Stable tag: 1.0.22
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,12 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.22 =
+* Fixed: sorting search results by price orders them by price (it ordered them by discount), and every product takes part - not only the ones on sale.
+* New: when Quissly refuses your store's searches, Search status says so and why, in Quissly's own words, instead of showing them as active; Test connection explains a refusal by its cause (usually a plan Quissly does not have yet), and Finish Setup checks it at once.
+* New: the sync log says why a release on GitHub was not installed.
+* Changed: the Quissly Admin Panel receives its sign-in session in a part of its address that is never sent to a server.
 
 = 1.0.21 =
 * New: Quissly Setup confirms the account's email with a 6-digit code Quissly sends to it, which Quissly now asks for before it creates an account.

@@ -142,13 +142,17 @@ class Quissly_Panel_Session {
 	/**
 	 * The iframe URL: the panel, bootstrapped with the session. PURE + unit-testable.
 	 *
+	 * The tokens go in the fragment (#), which the browser never sends to a server, so they stay
+	 * out of access logs and Referer headers; the panel reads them there first (the query string
+	 * only for older links) and removes them from its address.
+	 *
 	 * @param string $panel_url     Panel base URL.
 	 * @param string $access_token  Session access token.
 	 * @param string $refresh_token Session refresh token.
 	 * @return string
 	 */
 	public static function embed_url( $panel_url, $access_token, $refresh_token ) {
-		return rtrim( (string) $panel_url, '/' ) . '/?' . http_build_query(
+		return rtrim( (string) $panel_url, '/' ) . '/#' . http_build_query(
 			array(
 				'access_token'  => (string) $access_token,
 				'refresh_token' => (string) $refresh_token,

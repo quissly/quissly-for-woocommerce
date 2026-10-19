@@ -550,11 +550,12 @@ class Quissly_Search_Interceptor {
 	/**
 	 * Map a WooCommerce orderby value to Quissly sort_by / sort_type.
 	 *
-	 * LIVE sort_by ENUM (reordered — these numbers changed; an old number is still a VALID
-	 * number, so a stale value sorts by the WRONG field silently):
-	 *   0 relevance/default | 1 on-sale/discount | 2 price (sort_type 1=asc, 2=desc) |
-	 *   3 date/newness | 4 popularity
-	 * sort_type applies ONLY to price (sort_by 2): 1 ascending, 2 descending.
+	 * Quissly's sort_by codes as its search engine reads them (since 2026-06-22):
+	 *   0 relevance/default | 1 price (discounted_price) | 2 discount (discount_percent)
+	 * Any other number is relevance; sort_type 1 ascending, 2 descending. Until 2026-10-19
+	 * price went out as 2 and on-sale as 1 - a price sort ordered by discount. The engine sorts
+	 * on discounted_price, which the product mapper therefore always sends. Date and
+	 * popularity have no Quissly sort and get relevance.
 	 *
 	 * @param string $orderby WooCommerce orderby.
 	 * @return array{sort_by:int,sort_type:int|null}
@@ -563,15 +564,11 @@ class Quissly_Search_Interceptor {
 		switch ( $orderby ) {
 			case 'on-sale':
 			case 'discount':
-				return array( 'sort_by' => 1, 'sort_type' => null );
-			case 'price':
-				return array( 'sort_by' => 2, 'sort_type' => 1 );
-			case 'price-desc':
 				return array( 'sort_by' => 2, 'sort_type' => 2 );
-			case 'date':
-				return array( 'sort_by' => 3, 'sort_type' => null );
-			case 'popularity':
-				return array( 'sort_by' => 4, 'sort_type' => null );
+			case 'price':
+				return array( 'sort_by' => 1, 'sort_type' => 1 );
+			case 'price-desc':
+				return array( 'sort_by' => 1, 'sort_type' => 2 );
 			case 'relevance':
 			case 'menu_order':
 			case '':
