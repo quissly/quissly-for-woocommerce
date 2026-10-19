@@ -53,6 +53,7 @@ class Quissly_Setup {
 	 */
 	public function register() {
 		add_action( 'wp_ajax_quissly_setup_connect', array( $this, 'ajax_connect' ) );
+		add_action( 'wp_ajax_quissly_setup_send_code', array( $this, 'ajax_send_code' ) );
 		add_action( 'wp_ajax_quissly_setup_plan', array( $this, 'ajax_plan' ) );
 		add_action( 'wp_ajax_quissly_setup_status', array( $this, 'ajax_status' ) );
 		add_action( 'wp_ajax_quissly_setup_finish', array( $this, 'ajax_finish' ) );
@@ -299,6 +300,19 @@ class Quissly_Setup {
 	}
 
 	/**
+	 * Step 1, before Save: Quissly mails the sign-up code to the email the account will use.
+	 */
+	public function ajax_send_code() {
+		$this->verify();
+		$email   = isset( $_POST['email'] ) ? sanitize_text_field( wp_unslash( $_POST['email'] ) ) : '';
+		$problem = Quissly_Setup_Input::emailProblem( $email );
+		if ( '' !== $problem ) {
+			wp_send_json( array( 'ok' => false, 'message' => __( 'Enter a valid email address, like name@example.com.', 'quissly-for-woocommerce' ) ) );
+		}
+		wp_send_json( Quissly_Wizard::send_signup_code( $email ) );
+	}
+
+	/**
 	 * Step 1: create the account and connect.
 	 */
 	public function ajax_connect() {
@@ -328,8 +342,13 @@ class Quissly_Setup {
 		if ( mb_strlen( $description ) > 500 ) {
 			wp_send_json( array( 'ok' => false, 'message' => __( 'Description must be 500 characters or fewer.', 'quissly-for-woocommerce' ) ) );
 		}
+		// The six digits Quissly mailed to the email (ajax_send_code); its sign-up refuses without them.
+		$code = isset( $_POST['verification_code'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['verification_code'] ) ) ) : '';
+		if ( 1 !== preg_match( '/^\d{6}$/', $code ) ) {
+			wp_send_json( array( 'ok' => false, 'message' => __( 'Enter the 6-digit code we emailed you.', 'quissly-for-woocommerce' ) ) );
+		}
 
-		$result = Quissly_Wizard::connect_automatically( $email, trim( $store_name ), trim( $description ) );
+		$result = Quissly_Wizard::connect_automatically( $email, trim( $store_name ), trim( $description ), $code );
 		if ( ! $result['ok'] ) {
 			wp_send_json( array( 'ok' => false, 'message' => $result['message'] ) );
 		}
@@ -524,7 +543,8 @@ class Quissly_Setup {
 			'reload'    => admin_url( 'admin.php?page=' . Quissly_Admin::PAGE_SETTINGS ),
 			'csrf'      => array( '_ajax_nonce' => wp_create_nonce( self::NONCE ) ),
 			'endpoints' => array(
-				'connect' => array( 'url' => $ajax, 'params' => array( 'action' => 'quissly_setup_connect' ) ),
+				'connect'   => array( 'url' => $ajax, 'params' => array( 'action' => 'quissly_setup_connect' ) ),
+				'send_code' => array( 'url' => $ajax, 'params' => array( 'action' => 'quissly_setup_send_code' ) ),
 				'plan'    => array( 'url' => $ajax, 'params' => array( 'action' => 'quissly_setup_plan' ) ),
 				'status'  => array( 'url' => $ajax, 'params' => array( 'action' => 'quissly_setup_status' ) ),
 				'finish'  => array( 'url' => $ajax, 'params' => array( 'action' => 'quissly_setup_finish' ) ),
@@ -556,7 +576,18 @@ class Quissly_Setup {
 					'nameMissing'  => __( 'Add your store name to continue.', 'quissly-for-woocommerce' ),
 					'nameInvalid'  => __( 'Fix the store name to continue.', 'quissly-for-woocommerce' ),
 					'sellMissing'  => __( 'Add what you sell to continue.', 'quissly-for-woocommerce' ),
+					'codeNotSent'  => __( 'Confirm the email with a code to continue.', 'quissly-for-woocommerce' ),
+					'codeMissing'  => __( 'Enter the 6-digit code from your email to continue.', 'quissly-for-woocommerce' ),
 					'none'         => __( 'Nothing is charged yet.', 'quissly-for-woocommerce' ),
+				),
+				// The emailed code under the email field ([email] is the address).
+				'verify'      => array(
+					'intro'   => __( 'We\'ll email a 6-digit code to [email] to confirm it\'s yours.', 'quissly-for-woocommerce' ),
+					'sent'    => __( 'We sent a 6-digit code to [email]. It expires in 10 minutes.', 'quissly-for-woocommerce' ),
+					'label'   => __( 'Verification code', 'quissly-for-woocommerce' ),
+					'send'    => __( 'Send code', 'quissly-for-woocommerce' ),
+					'resend'  => __( 'Send a new code', 'quissly-for-woocommerce' ),
+					'sending' => __( 'Sending…', 'quissly-for-woocommerce' ),
 				),
 				'chipWorking' => __( 'Setting up...', 'quissly-for-woocommerce' ),
 				'chipReady'   => __( 'Ready', 'quissly-for-woocommerce' ),

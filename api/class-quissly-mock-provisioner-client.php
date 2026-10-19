@@ -70,17 +70,19 @@ class Quissly_Mock_Provisioner_Client implements Quissly_Provisioner_Client {
 	 * @param string|null $first_name     Admin's first name, or null.
 	 * @param string|null $last_name      Admin's last name, or null.
 	 * @param string|null $description    What the store is, or null for the plugin's one-liner.
+	 * @param string|null $verification_code The code Quissly mailed to $email.
 	 * @return array{ok:bool,api_key:string,project_id:string,store_id:string,error:string}
 	 */
-	public function provision( $domain, $email, $public_key_pem, $store_name, $first_name, $last_name, $description = null ) {
+	public function provision( $domain, $email, $public_key_pem, $store_name, $first_name, $last_name, $description = null, $verification_code = null ) {
 		$this->calls[] = array(
-			'domain'         => $domain,
-			'email'          => $email,
-			'public_key_pem' => $public_key_pem,
-			'store_name'     => $store_name,
-			'first_name'     => $first_name,
-			'description'    => $description,
-			'last_name'      => $last_name,
+			'domain'            => $domain,
+			'email'             => $email,
+			'public_key_pem'    => $public_key_pem,
+			'store_name'        => $store_name,
+			'first_name'        => $first_name,
+			'description'       => $description,
+			'last_name'         => $last_name,
+			'verification_code' => $verification_code,
 		);
 
 		if ( ! $this->succeed ) {
@@ -100,5 +102,26 @@ class Quissly_Mock_Provisioner_Client implements Quissly_Provisioner_Client {
 			'store_id'   => $this->response['store_id'],
 			'error'      => '',
 		);
+	}
+
+	/**
+	 * Recorded sign-up code requests, each {domain, email}.
+	 *
+	 * @var array<int,array{domain:string,email:string}>
+	 */
+	public $code_requests = array();
+
+	/**
+	 * @param string $domain Storefront host.
+	 * @param string $email  The address the account will be created with.
+	 * @return array{ok:bool,error:string}
+	 */
+	public function send_code( $domain, $email ) {
+		$this->code_requests[] = array(
+			'domain' => $domain,
+			'email'  => $email,
+		);
+
+		return $this->succeed ? array( 'ok' => true, 'error' => '' ) : array( 'ok' => false, 'error' => $this->error );
 	}
 }

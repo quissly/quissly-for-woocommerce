@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.20
+Stable tag: 1.0.21
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,9 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.21 =
+* New: Quissly Setup confirms the account's email with a 6-digit code Quissly sends to it, which Quissly now asks for before it creates an account.
 
 = 1.0.20 =
 * Fixed: when Quick Recommendations find nothing, no empty card is shown under the search bar.

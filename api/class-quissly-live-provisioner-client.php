@@ -23,6 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Quissly_Live_Provisioner_Client implements Quissly_Provisioner_Client {
 
 	const PATH                = '/api/v1/services/external/open-source';
+	const SEND_CODE_PATH      = '/api/v1/services/external/open-source/send-code';
 	const DEFAULT_CONSOLE_URL = 'https://console.quissly.com';
 
 	/**
@@ -60,9 +61,10 @@ class Quissly_Live_Provisioner_Client implements Quissly_Provisioner_Client {
 	 * @param string|null $first_name     Admin's first name, or null.
 	 * @param string|null $last_name      Admin's last name, or null.
 	 * @param string|null $description    What the store is, or null for the plugin's one-liner.
+	 * @param string|null $verification_code The code Quissly mailed to $email (send_code()).
 	 * @return array{ok:bool,api_key:string,project_id:string,store_id:string,error:string}
 	 */
-	public function provision( $domain, $email, $public_key_pem, $store_name, $first_name, $last_name, $description = null ) {
+	public function provision( $domain, $email, $public_key_pem, $store_name, $first_name, $last_name, $description = null, $verification_code = null ) {
 		$payload = array(
 			'domain'            => $domain,
 			'public_key'        => $public_key_pem,
@@ -91,6 +93,10 @@ class Quissly_Live_Provisioner_Client implements Quissly_Provisioner_Client {
 		}
 		if ( '' !== $display_name ) {
 			$payload['display_name'] = $display_name;
+		}
+		// The sign-up refuses without the code Quissly mailed to the email.
+		if ( null !== $verification_code && '' !== trim( (string) $verification_code ) ) {
+			$payload['verification_code'] = trim( (string) $verification_code );
 		}
 
 		$response = wp_remote_post(
@@ -135,6 +141,40 @@ class Quissly_Live_Provisioner_Client implements Quissly_Provisioner_Client {
 			'store_id'   => '' !== $store_id ? $store_id : $project_id,
 			'project_id' => $project_id,
 			'error'      => '',
+		);
+	}
+
+	/**
+	 * Ask Quissly to mail a sign-up code to $email for this store's domain.
+	 *
+	 * @param string $domain Storefront host.
+	 * @param string $email  The address the account will be created with.
+	 * @return array{ok:bool,error:string}
+	 */
+	public function send_code( $domain, $email ) {
+		$response = wp_remote_post(
+			self::console_url() . self::SEND_CODE_PATH,
+			array(
+				'headers' => array( 'Content-Type' => 'application/json' ),
+				'body'    => wp_json_encode( array( 'email' => trim( (string) $email ), 'domain' => $domain ) ),
+				'timeout' => 30,
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return array( 'ok' => false, 'error' => $response->get_error_message() );
+		}
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( $status >= 200 && $status < 300 ) {
+			return array( 'ok' => true, 'error' => '' );
+		}
+		$decoded = json_decode( wp_remote_retrieve_body( $response ), true );
+		// Quissly's own words ("Please wait a minute before requesting another code.") are what help.
+		$detail = is_array( $decoded ) && isset( $decoded['detail'] ) && is_string( $decoded['detail'] ) ? trim( $decoded['detail'] ) : '';
+
+		return array(
+			'ok'    => false,
+			/* translators: %d: HTTP status code. */
+			'error' => '' !== $detail ? $detail : sprintf( __( 'Quissly could not send the code (HTTP %d).', 'quissly-for-woocommerce' ), $status ),
 		);
 	}
 

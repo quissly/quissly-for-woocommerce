@@ -160,9 +160,41 @@ class Quissly_Wizard {
 	 * @param string      $email      Account owner / console sign-in identity.
 	 * @param string|null $store_name  The name typed on Quissly Setup; null = store_display_name().
 	 * @param string|null $description The description on Quissly Setup; null = the plugin's one-liner.
+	 * @param string|null $verification_code The code Quissly mailed to $email (send_signup_code()).
 	 * @return array{ok:bool,message:string}
 	 */
-	public static function connect_automatically( $email, $store_name = null, $description = null ) {
+	/**
+	 * Ask Quissly to mail the sign-up code to $email (Quissly Setup step 1, before Save): since
+	 * 2026-10-19 its sign-up takes the email only with that code.
+	 *
+	 * @param string $email The address the account will be created with.
+	 * @return array{ok:bool,message:string}
+	 */
+	public static function send_signup_code( $email ) {
+		if ( '' !== (string) Quissly_Settings::get( 'quissly_token' ) ) {
+			return array(
+				'ok'      => false,
+				'message' => __( 'This site is already connected to Quissly. Connecting again would create a second account and abandon the products already synced to this one.', 'quissly-for-woocommerce' ),
+			);
+		}
+		$domain = (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+		if ( '' === $domain ) {
+			return array(
+				'ok'      => false,
+				'message' => __( 'Could not resolve this site\'s domain.', 'quissly-for-woocommerce' ),
+			);
+		}
+		$client = apply_filters( 'quissly_provisioner_client', null );
+		$client = ( $client instanceof Quissly_Provisioner_Client ) ? $client : new Quissly_Live_Provisioner_Client();
+		$sent   = $client->send_code( $domain, trim( (string) $email ) );
+
+		return array(
+			'ok'      => $sent['ok'],
+			'message' => $sent['ok'] ? '' : $sent['error'],
+		);
+	}
+
+	public static function connect_automatically( $email, $store_name = null, $description = null, $verification_code = null ) {
 		$email = trim( (string) $email );
 		if ( '' === $email || ! is_email( $email ) ) {
 			return array(
@@ -208,7 +240,8 @@ class Quissly_Wizard {
 			null !== $store_name ? $store_name : self::store_display_name(),
 			'' !== $first_name ? $first_name : null,
 			'' !== $last_name ? $last_name : null,
-			$description
+			$description,
+			$verification_code
 		);
 
 		if ( ! $response['ok'] ) {
