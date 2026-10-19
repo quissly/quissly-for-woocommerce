@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.22
+Stable tag: 1.0.23
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,11 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.23 =
+* New: Quick Recommendations show a spinner while Quissly answers.
+* Fixed: an answer for text that has changed since, or was cleared, no longer replaces the suggestions.
+* Fixed: in the search overlay, the suggestions are part of the overlay's panel instead of a second card stacked on it.
 
 = 1.0.22 =
 * Fixed: sorting search results by price orders them by price (it ordered them by discount), and every product takes part - not only the ones on sale.

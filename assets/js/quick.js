@@ -147,6 +147,9 @@
 	// ---------------------------------------------------------------------------------
 
 	var dropdown, currentInput, rows = [], activeRow = -1;
+	var asked = 0;           // the latest request: an older answer is dropped
+	var loadingTimer = null;  // the spinner, shown when an answer takes longer than LOADING_DELAY_MS
+	var LOADING_DELAY_MS = 150;
 
 	function ensureDropdown() {
 		if ( dropdown ) { return dropdown; }
@@ -191,8 +194,33 @@
 	}
 
 	function hide() {
+		stopLoading();
 		if ( dropdown ) { dropdown.style.display = 'none'; }
 		activeRow = -1;
+	}
+
+	function stopLoading() {
+		clearTimeout( loadingTimer );
+		loadingTimer = null;
+	}
+
+	/** A spinner while Quissly answers (the Shopify app's), named for screen readers. */
+	function showLoading() {
+		ensureDropdown();
+		dropdown.innerHTML = '';
+		rows = [];
+		activeRow = -1;
+		var box = el( 'div', 'quissly-quick__loading' );
+		box.setAttribute( 'role', 'status' );
+		var spinner = el( 'span', 'quissly-quick__spinner' );
+		spinner.setAttribute( 'aria-hidden', 'true' );
+		box.appendChild( spinner );
+		var label = el( 'span', 'quissly-quick__sr' );
+		label.textContent = ( CFG.i18n && CFG.i18n.searching ) || 'Searching…';
+		box.appendChild( label );
+		dropdown.appendChild( box );
+		dropdown.style.display = 'block';
+		place();
 	}
 
 	// Only http(s) and same-origin-relative URLs - never javascript:, data:, etc.
@@ -289,15 +317,26 @@
 	}
 
 	var fetchSuggestions = debounce( function ( term ) {
+		// The text may have changed during the debounce (cleared, or edited).
+		if ( ! currentInput || ( currentInput.value || '' ).trim() !== term ) { return; }
+		var mine = ++asked;
+		stopLoading();
+		loadingTimer = setTimeout( function () {
+			if ( mine === asked ) { showLoading(); }
+		}, LOADING_DELAY_MS );
 		post( 'quick', { q: term } ).then( function ( data ) {
+			if ( mine !== asked ) { return; } // a later request owns the dropdown
+			stopLoading();
 			render( data && data.suggestions ? data.suggestions : [] );
-		} ).catch( function () { hide(); } );
+		} ).catch( function () {
+			if ( mine === asked ) { hide(); }
+		} );
 	}, CFG.debounceMs || 200 );
 
 	function onInput( e ) {
 		currentInput = e.target;
 		var term = ( e.target.value || '' ).trim();
-		if ( term.length < ( CFG.minChars || 2 ) ) { hide(); return; }
+		if ( term.length < ( CFG.minChars || 2 ) ) { asked++; hide(); return; }
 		fetchSuggestions( term );
 	}
 
