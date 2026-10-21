@@ -66,6 +66,11 @@ class Quissly_Sync_Hooks {
 		add_action( 'woocommerce_save_product_variation', array( $this, 'on_variation_changed' ), 10, 1 );
 		add_action( 'woocommerce_delete_product_variation', array( $this, 'on_variation_changed' ), 10, 1 );
 		add_action( 'woocommerce_trash_product_variation', array( $this, 'on_variation_changed' ), 10, 1 );
+
+		// A sale recorded (or taken back on a cancel): total_sales changed, which Quissly's
+		// popularity sort reads. WooCommerce fires it once per product per order, with the
+		// product's (a variation's parent's) id; the queue's dedup and delayed flush batch them.
+		add_action( 'woocommerce_updated_product_sales', array( $this, 'on_sales_changed' ), 10, 1 );
 	}
 
 	/**
@@ -122,6 +127,16 @@ class Quissly_Sync_Hooks {
 	 */
 	public function on_variation_changed( $variation_id ) {
 		$this->enqueue_parent_of( (int) $variation_id );
+	}
+
+	/**
+	 * A product's total_sales changed. A translation's sale queues its main-language product,
+	 * the one Quissly holds.
+	 *
+	 * @param int $product_id Product id.
+	 */
+	public function on_sales_changed( $product_id ) {
+		$this->enqueue_upsert( Quissly_Languages::to_main( (int) $product_id ) );
 	}
 
 	/**

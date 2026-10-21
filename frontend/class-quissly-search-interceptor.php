@@ -550,12 +550,19 @@ class Quissly_Search_Interceptor {
 	/**
 	 * Map a WooCommerce orderby value to Quissly sort_by / sort_type.
 	 *
-	 * Quissly's sort_by codes as its search engine reads them (since 2026-06-22):
+	 * Quissly's sort_by codes as its search engine reads them:
 	 *   0 relevance/default | 1 price (discounted_price) | 2 discount (discount_percent)
+	 *   3 title (case-insensitive name) | 4 popularity | 5 created_at
 	 * Any other number is relevance; sort_type 1 ascending, 2 descending. Until 2026-10-19
 	 * price went out as 2 and on-sale as 1 - a price sort ordered by discount. The engine sorts
-	 * on discounted_price, which the product mapper therefore always sends. Date and
-	 * popularity have no Quissly sort and get relevance.
+	 * on discounted_price, and on the metadata popularity / created_at, which the product
+	 * mapper therefore always sends; a product without the value goes last either way.
+	 *
+	 * Directions are WooCommerce's own (WC_Query::get_catalog_ordering_args()): popularity is
+	 * always most sold first; date newest first unless "date-asc"; title A-Z unless
+	 * "title-desc". WooCommerce takes the direction from that suffix only - its product query
+	 * overwrites a separate &order= - so it is not read here either. Rating has no Quissly
+	 * sort: it gets relevance, while the dropdown says "average rating".
 	 *
 	 * @param string $orderby WooCommerce orderby.
 	 * @return array{sort_by:int,sort_type:int|null}
@@ -569,6 +576,18 @@ class Quissly_Search_Interceptor {
 				return array( 'sort_by' => 1, 'sort_type' => 1 );
 			case 'price-desc':
 				return array( 'sort_by' => 1, 'sort_type' => 2 );
+			case 'title':
+			case 'title-asc':
+				return array( 'sort_by' => 3, 'sort_type' => 1 );
+			case 'title-desc':
+				return array( 'sort_by' => 3, 'sort_type' => 2 );
+			case 'popularity':
+				return array( 'sort_by' => 4, 'sort_type' => 2 );
+			case 'date':
+			case 'date-desc':
+				return array( 'sort_by' => 5, 'sort_type' => 2 );
+			case 'date-asc':
+				return array( 'sort_by' => 5, 'sort_type' => 1 );
 			case 'relevance':
 			case 'menu_order':
 			case '':

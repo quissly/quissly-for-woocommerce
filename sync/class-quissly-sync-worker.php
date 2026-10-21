@@ -545,6 +545,10 @@ class Quissly_Sync_Worker {
 			'regular_price'     => $product->get_regular_price(),
 			'sale_price'        => $product->get_sale_price(),
 			'in_stock'          => $product->is_in_stock(),
+			// For Quissly's popularity and newest sorts: what WooCommerce's own sort by popularity
+			// and by latest read.
+			'total_sales'       => $product->get_total_sales(),
+			'created_at'        => $this->created_at( $product ),
 		);
 
 		if ( $is_variable ) {
@@ -558,6 +562,23 @@ class Quissly_Sync_Worker {
 		$data['features'] = $this->catalog_attributes( $product );
 
 		return $data;
+	}
+
+	/**
+	 * When the product was created, in unix seconds: its post_date_gmt (WooCommerce's date
+	 * created), else its post_date in the site's timezone (WordPress leaves the GMT one zero on
+	 * a post saved without a date of its own). 0 when neither is known.
+	 *
+	 * @param WC_Product $product Product.
+	 * @return int
+	 */
+	private function created_at( WC_Product $product ) {
+		$created = $product->get_date_created();
+		if ( $created ) {
+			return $created->getTimestamp();
+		}
+
+		return (int) get_post_timestamp( $product->get_id() );
 	}
 
 	/**

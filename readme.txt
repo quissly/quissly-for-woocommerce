@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.23
+Stable tag: 1.0.24
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,10 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.24 =
+* New: search results sort by name, popularity and newest through Quissly, across all matches, not only the first page.
+* New: each product sends its popularity (total sales) and creation date; a sale resends its products so popularity stays current.
 
 = 1.0.23 =
 * New: Quick Recommendations show a spinner while Quissly answers.

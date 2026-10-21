@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *  - failpage2 -> return null on page >= 2 (page-2+ failure: graceful, no native swap)
  *
  * Reports num_total_results far larger than the page so pagination is exercised, and a
- * DIFFERENT ordering for price sort (sort_by 2) to prove the sort wiring. (Documents carry
+ * DIFFERENT ordering for price sort (sort_by 1) to prove the sort wiring. (Documents carry
  * id + score; top_variant_id is OPTIONAL and only returned by the live API — the variant
  * deep-link is verified live, not via a canned mock fixture.)
  */
@@ -55,7 +55,7 @@ class Quissly_Mock_Search_Client implements Quissly_Search_Client {
 		}
 
 		$page_size = max( 1, (int) ( $request['page_size'] ?? 6 ) );
-		$pool      = ( 2 === (int) ( $request['sort_by'] ?? 0 ) ) ? self::PRICE_ORDER : self::RELEVANCE_ORDER;
+		$pool      = ( 1 === (int) ( $request['sort_by'] ?? 0 ) ) ? self::PRICE_ORDER : self::RELEVANCE_ORDER;
 		$slice     = array_slice( $pool, ( $page - 1 ) * $page_size, $page_size );
 
 		$documents = array();

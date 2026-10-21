@@ -39,8 +39,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Expected input array:
  *  id, type ('simple'|'variable'), title, description, short_description, sku, brand,
- *  url, images[], categories[{slug,primary}], tags[slug]
- *  simple:   regular_price, sale_price (empty if not on sale), in_stock
+ *  url, images[], categories[{slug,primary}], tags[slug], total_sales, created_at (unix
+ *  seconds, UTC)
+ *  simple:  regular_price, sale_price (empty if not on sale), in_stock
  *  variable: regular_price, sale_price, attributes{<raw_key>:value} as the PARENT
  *            baseline, plus variations[{id, regular_price, sale_price, sku, image,
  *            in_stock, attributes{<raw_key>:value}}]. A variation field left empty
@@ -104,6 +105,16 @@ class Quissly_Product_Mapper {
 			$metadata['selected_options'] = self::selected_options(
 				self::canonical_attributes( $product['attributes'] ?? array() )
 			);
+		}
+		// What Quissly's popularity (4) and newest (5) sorts read, as WooCommerce's own sorts do:
+		// total_sales and the creation time (unix seconds, UTC). Ints on every product - the
+		// engine compares the values as sent, so a string among ints breaks the sort - and
+		// popularity always, 0 without sales (a product without it goes last). On the parent
+		// only: Quissly gives each variant its parent's metadata.
+		$metadata['popularity'] = max( 0, (int) ( $product['total_sales'] ?? 0 ) );
+		$created_at             = (int) ( $product['created_at'] ?? 0 );
+		if ( $created_at > 0 ) {
+			$metadata['created_at'] = $created_at;
 		}
 		$metadata = self::add_features( $metadata, $product['features'] ?? array() );
 
