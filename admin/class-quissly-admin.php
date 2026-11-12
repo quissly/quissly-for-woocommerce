@@ -249,6 +249,7 @@ class Quissly_Admin {
 		$this->toggle_row( 'quissly_enable_image', __( 'Image search', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_qchat', __( 'QChat assistant', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_events', __( 'Shopping activity for Quissly analytics', 'quissly-for-woocommerce' ) );
+		$this->toggle_row( 'quissly_enable_order_status', __( 'Order status in QChat', 'quissly-for-woocommerce' ) );
 		echo '</tbody></table>';
 		submit_button( __( 'Save features', 'quissly-for-woocommerce' ) );
 		echo '</form>';
@@ -389,6 +390,7 @@ class Quissly_Admin {
 		$this->toggle_row( 'quissly_enable_image', __( 'Enable image search', 'quissly-for-woocommerce' ), __( 'A camera button in the search bar: the shopper searches with a photo.', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_qchat', __( 'Enable QChat', 'quissly-for-woocommerce' ), __( 'Before switching this on, set up your chat in the Quissly Admin Panel (languages, colors, greeting): the chat bubble appears on every storefront page the moment this is saved, exactly as configured there.', 'quissly-for-woocommerce' ) );
 		$this->toggle_row( 'quissly_enable_events', __( 'Shopping activity for Quissly analytics', 'quissly-for-woocommerce' ), __( 'Sends product page views, searches, adds to cart and to the wishlist (YITH WooCommerce Wishlist), and paid orders to Quissly, for the analytics in the Quissly Admin Panel. Products and order totals only - never a customer\'s name, email, address or IP. A guest who has not consented to statistics cookies is not tracked. On by default.', 'quissly-for-woocommerce' ) );
+		$this->toggle_row( 'quissly_enable_order_status', __( 'Order status in QChat', 'quissly-for-woocommerce' ), __( 'When a shopper asks the chat about an order, Quissly asks this store, and the store answers only if the email or phone they give is the order\'s own: its status, items and tracking. Nothing else about your orders is sent to Quissly. On by default.', 'quissly-for-woocommerce' ) );
 		$this->section_close();
 
 		// --- Search Examples: the typing animation (the Shopify app's name) -------------------
@@ -1140,13 +1142,13 @@ class Quissly_Admin {
 	}
 
 	/**
-	 * Save the dashboard feature toggles (only the seven enable flags).
+	 * Save the dashboard feature toggles (only the eight enable flags).
 	 */
 	public function handle_save_dashboard() {
 		$this->verify( 'quissly_dashboard' );
 
 		$locked = Quissly_Plan_Gate::locked();
-		foreach ( array( 'quissly_enable_search', 'quissly_enable_overlay', 'quissly_enable_quick', 'quissly_enable_voice', 'quissly_enable_image', 'quissly_enable_qchat', 'quissly_enable_events' ) as $key ) {
+		foreach ( array( 'quissly_enable_search', 'quissly_enable_overlay', 'quissly_enable_quick', 'quissly_enable_voice', 'quissly_enable_image', 'quissly_enable_qchat', 'quissly_enable_events', 'quissly_enable_order_status' ) as $key ) {
 			if ( isset( $locked[ $key ] ) ) {
 				continue; // Not in the plan: what was saved stays.
 			}

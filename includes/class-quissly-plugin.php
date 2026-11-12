@@ -108,6 +108,7 @@ final class Quissly_Plugin {
 			'includes/class-quissly-event-queue.php',
 			'includes/class-quissly-events.php',
 			'includes/class-quissly-version-report.php',
+			'includes/class-quissly-order-lookup.php',
 			'admin/class-quissly-settings.php',
 			'admin/class-quissly-wizard.php',
 			'includes/class-quissly-description-draft.php',
@@ -207,6 +208,8 @@ final class Quissly_Plugin {
 		// connected store; the send action and the wc-ajax endpoint must exist on every request.
 		( new Quissly_Events() )->register();
 		( new Quissly_Version_Report() )->register();
+		// Order status for QChat: Quissly asks, signed; gates internally on its switch + a connected store.
+		( new Quissly_Order_Lookup() )->register();
 
 		$use_mock = defined( 'QUISSLY_USE_MOCK_SEARCH' ) && QUISSLY_USE_MOCK_SEARCH;
 		if ( $use_mock ) {

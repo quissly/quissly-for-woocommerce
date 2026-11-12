@@ -71,6 +71,8 @@ class Quissly_Settings {
 			'quissly_overlay_suggestions_manual_by_language' => array( 'default' => array(), 'type' => 'lines_by_language' ),
 			// Shopping activity for Quissly's analytics (Quissly_Events; on by default).
 			'quissly_enable_events'           => array( 'default' => true, 'type' => 'bool' ),
+			// QChat answers "where is my order?" from this store (Quissly_Order_Lookup).
+			'quissly_enable_order_status'     => array( 'default' => true, 'type' => 'bool' ),
 			// Explicit X-Environment override (empty = auto-detect from WP_ENVIRONMENT_TYPE). The
 			// only way, besides QUISSLY_ENV, to select demo/test (no WP type maps to those).
 			'quissly_environment'             => array( 'default' => '', 'type' => 'text' ),

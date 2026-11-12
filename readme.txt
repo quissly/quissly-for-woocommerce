@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.24
+Stable tag: 1.0.25
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,9 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.25 =
+* New: order status in QChat - when a shopper asks the chat about an order, Quissly asks your store, and the store answers only if the email or phone given is the order's own (status, items, tracking). Switch "Order status in QChat" in Configuration, on by default.
 
 = 1.0.24 =
 * New: search results sort by name, popularity and newest through Quissly, across all matches, not only the first page.
