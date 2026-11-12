@@ -154,23 +154,26 @@ class Quissly_Proxy {
 	}
 
 	/**
-	 * A fixed-window per-IP counter, stored in a transient. Not exact under a burst
-	 * (get-then-set, no atomic increment) - deliberately simple, matching the scope of
-	 * this being a throttle against casual abuse, not a hardened distributed limiter.
+	 * A fixed-window per-IP counter, then the endpoint's store-wide limit (Quissly_Rate_Limiter,
+	 * its own capped table - no longer transients). Not exact under a burst (get-then-set) -
+	 * deliberately simple: the store-wide limit is what holds against many addresses.
 	 *
 	 * @param string $bucket Endpoint identifier.
 	 * @param int    $max    Requests allowed per RATE_WINDOW.
 	 * @return bool
 	 */
 	private function rate_limited( $bucket, $max ) {
-		$key   = 'quissly_rl_' . $bucket . '_' . md5( $this->client_ip() );
-		$count = (int) get_transient( $key );
-		if ( $count >= $max ) {
+		if ( ! Quissly_Rate_Limiter::allow( $bucket . '|' . $this->client_ip(), $max, self::RATE_WINDOW, time() ) ) {
 			return true;
 		}
-		set_transient( $key, $count + 1, self::RATE_WINDOW );
+		// Then the store-wide limit: many addresses together cannot spend more than this.
+		$endpoint = array(
+			'quissly_enable_quick' => 'quick',
+			'quissly_enable_voice' => 'voice',
+			'quissly_enable_image' => 'image',
+		);
 
-		return false;
+		return isset( $endpoint[ $bucket ] ) && ! Quissly_Rate_Limiter::store_allows( $endpoint[ $bucket ] );
 	}
 
 	/**

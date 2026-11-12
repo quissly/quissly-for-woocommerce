@@ -97,6 +97,7 @@ final class Quissly_Plugin {
 			'frontend/interface-quissly-quick-client.php',
 			'frontend/class-quissly-live-quick-client.php',
 			'frontend/class-quissly-mock-quick-client.php',
+			'includes/class-quissly-rate-limiter.php',
 			'frontend/class-quissly-proxy.php',
 			'frontend/class-quissly-assets.php',
 			'widgets/class-quissly-qchat.php',

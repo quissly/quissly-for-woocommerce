@@ -29,9 +29,11 @@ class Quissly_Uninstall {
 		require_once QUISSLY_PLUGIN_DIR . 'sync/class-quissly-dirty-queue.php';
 		require_once QUISSLY_PLUGIN_DIR . 'sync/class-quissly-sync-log.php';
 		require_once QUISSLY_PLUGIN_DIR . 'includes/class-quissly-event-queue.php';
+		require_once QUISSLY_PLUGIN_DIR . 'includes/class-quissly-rate-limiter.php';
 
 		Quissly_Dirty_Queue::drop_table();
 		Quissly_Event_Queue::drop_table();
+		Quissly_Rate_Limiter::drop_table();
 		Quissly_Sync_Log::delete_log();
 
 		// Cancel any pending/recurring flush - runtime state, like the queue table above,

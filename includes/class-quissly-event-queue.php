@@ -17,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class Quissly_Event_Queue {
 
+	const TRIM_EVERY = 500;
+
 	/**
 	 * Fully-qualified table name.
 	 *
@@ -67,7 +69,7 @@ final class Quissly_Event_Queue {
 	 */
 	public static function add( array $body, $now ) {
 		global $wpdb;
-		return false !== $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$added = false !== $wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 			self::table_name(),
 			array(
 				'body'       => wp_json_encode( $body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ),
@@ -77,6 +79,13 @@ final class Quissly_Event_Queue {
 			),
 			array( '%s', '%d', '%d', '%d' )
 		);
+		// Every TRIM_EVERY-th row trims the queue to Quissly_Events::KEEP, so a store whose events
+		// are not being sent (or a flood of them) never grows it past that.
+		if ( $added && (int) $wpdb->insert_id > 0 && 0 === (int) $wpdb->insert_id % self::TRIM_EVERY ) {
+			self::trim( Quissly_Events::KEEP );
+		}
+
+		return $added;
 	}
 
 	/**

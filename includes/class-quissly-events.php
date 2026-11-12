@@ -423,20 +423,15 @@ final class Quissly_Events {
 	}
 
 	/**
-	 * A fixed-window per-IP counter in a transient (Quissly_Proxy's, with its own bucket).
+	 * A fixed-window per-IP counter, then the store-wide limit (Quissly_Rate_Limiter).
 	 *
 	 * @return bool
 	 */
 	private static function rate_limited() {
-		$ip    = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- an opaque throttle-bucket key, never rendered or stored raw.
-		$key   = 'quissly_rl_events_' . md5( (string) apply_filters( 'quissly_client_ip', $ip ) );
-		$count = (int) get_transient( $key );
-		if ( $count >= self::RATE_MAX ) {
-			return true;
-		}
-		set_transient( $key, $count + 1, self::RATE_WINDOW );
+		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- an opaque throttle-bucket key, never rendered or stored raw.
 
-		return false;
+		return ! Quissly_Rate_Limiter::allow( 'events|' . (string) apply_filters( 'quissly_client_ip', $ip ), self::RATE_MAX, self::RATE_WINDOW, time() )
+			|| ! Quissly_Rate_Limiter::store_allows( 'event' );
 	}
 
 	/**

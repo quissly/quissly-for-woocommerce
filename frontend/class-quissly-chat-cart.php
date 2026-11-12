@@ -91,6 +91,10 @@ class Quissly_Chat_Cart {
 	 * in the cart - most recently added line first, 0 removes the line.
 	 */
 	public function handle_adjust() {
+		// The store-wide limit (Quissly_Rate_Limiter): many addresses together cannot change carts faster.
+		if ( ! Quissly_Rate_Limiter::store_allows( 'cart_adjust' ) ) {
+			wp_send_json( array( 'changed' => 0 ), 429 );
+		}
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- same trust level as WooCommerce's own wc-ajax add_to_cart, which takes no nonce.
 		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
 		$reduce_by  = isset( $_POST['delta'] ) ? -1 * (int) $_POST['delta'] : 0;
