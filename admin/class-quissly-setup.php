@@ -580,6 +580,9 @@ class Quissly_Setup {
 				'payTimeout'  => __( 'We have not seen the payment yet. Finish it in the other tab, then press "I have paid".', 'quissly-for-woocommerce' ),
 				'payNotYet'   => __( 'Payment not received yet.', 'quissly-for-woocommerce' ),
 				'error'       => __( 'Could not reach the server. Try again in a minute.', 'quissly-for-woocommerce' ),
+				// A status check the site's own security refused ([status]: its HTTP code); the page has
+				// already reloaded itself twice (setup.js). No cron line here: WordPress runs its own.
+				'blocked'     => __( "Your site's security refused this page's request (HTTP [status]), so the sync and this status have stopped. Reload the page. If this keeps happening, let your admin address through in Cloudflare or your hosting firewall.", 'quissly-for-woocommerce' ),
 				'compare'       => __( 'Compare all features', 'quissly-for-woocommerce' ),
 				'compareBack'   => __( '← Back to plan cards', 'quissly-for-woocommerce' ),
 				'emailRequired' => __( 'Email is required.', 'quissly-for-woocommerce' ),

@@ -6,7 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 WC requires at least: 8.0
 WC tested up to: 11.2
-Stable tag: 1.0.26
+Stable tag: 1.0.27
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,10 @@ When a shopper uses your theme's filters (category, price, attributes), WooComme
 Switch Search off in Quissly > Configuration > Features: WooCommerce's own search answers at once and nothing is lost. Deactivating the plugin does the same.
 
 == Changelog ==
+
+= 1.0.27 =
+* Quissly Setup's last step reloads itself when the site's own security (Cloudflare, a hosting firewall) refuses its status checks, and says so if that keeps happening; it also checks at once when you come back to its tab.
+* The old connection form (Configuration, after Setup) asks for the code Quissly emails, as Setup does.
 
 = 1.0.26 =
 * Security: the public storefront endpoints (Quick, voice, image, shopping events, the chat cart) have a store-wide limit on top of the per-visitor one, so many addresses together cannot flood them; their counters live in the plugin's own size-capped table instead of WordPress options.

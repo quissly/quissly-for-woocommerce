@@ -21,6 +21,34 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Quissly_Admin {
 
+	/**
+	 * The old Connect's "Send code" (render_wizard()): Quissly Setup's send-code action, Quissly's own
+	 * words back under the field.
+	 */
+	const SEND_CODE_JS = <<<'JS'
+(function () {
+	var send = document.getElementById('quissly-connect-send');
+	if (!send) { return; }
+	send.addEventListener('click', function () {
+		var email = (document.getElementById('quissly-connect-email') || {}).value || '';
+		var status = document.getElementById('quissly-connect-code-status');
+		var label = send.textContent;
+		var body = new URLSearchParams({action: 'quissly_setup_send_code', _ajax_nonce: send.getAttribute('data-nonce'), email: email.trim()});
+		send.disabled = true;
+		send.textContent = send.getAttribute('data-sending');
+		fetch(send.getAttribute('data-url'), {method: 'POST', body: body, credentials: 'same-origin'})
+			.then(function (r) { return r.json(); })
+			.then(function (a) {
+				status.textContent = a.ok ? send.getAttribute('data-sent') : (a.message || send.getAttribute('data-failed'));
+				status.style.color = a.ok ? '' : '#b32d2e';
+				if (a.ok) { document.getElementById('quissly-connect-code').focus(); }
+			})
+			.catch(function () { status.textContent = send.getAttribute('data-failed'); status.style.color = '#b32d2e'; })
+			.then(function () { send.disabled = false; send.textContent = label; });
+	});
+})();
+JS;
+
 	const CAP        = 'manage_woocommerce';
 	const MENU_SLUG  = 'quissly';
 	const PAGE_SETTINGS = 'quissly-settings';
@@ -1169,6 +1197,7 @@ class Quissly_Admin {
 			'token'    => isset( $_POST['token'] ) ? wp_unslash( $_POST['token'] ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized inside Settings::update.
 			'mode'     => isset( $_POST['mode'] ) ? sanitize_key( wp_unslash( $_POST['mode'] ) ) : 'qsearch',
 			'connect'  => isset( $_POST['connect'] ),
+			'code'     => isset( $_POST['verification_code'] ) ? sanitize_text_field( wp_unslash( $_POST['verification_code'] ) ) : '',
 			'email'    => isset( $_POST['email'] ) ? wp_unslash( $_POST['email'] ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- validated with is_email() inside connect_automatically().
 		);
 
@@ -1387,6 +1416,15 @@ class Quissly_Admin {
 					echo '<p>' . esc_html__( 'Connect your Quissly account automatically — no copying or pasting required. This creates a new Quissly account for this store.', 'quissly-for-woocommerce' ) . '</p>';
 					echo '<label for="quissly-connect-email">' . esc_html__( 'Email address', 'quissly-for-woocommerce' ) . '</label><br />';
 					echo '<input type="email" id="quissly-connect-email" class="regular-text" name="email" value="' . esc_attr( $current_user->user_email ) . '" required="required" />';
+					// Quissly creates the account only with the code it emailed (since 2026-10-19): Setup's
+					// own send-code action, and the code goes with Connect.
+					echo '<p><label for="quissly-connect-code">' . esc_html__( 'Verification code', 'quissly-for-woocommerce' ) . '</label><br />';
+					echo '<input type="text" id="quissly-connect-code" name="verification_code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" class="small-text" style="width:8em" required="required" /> ';
+					echo '<button type="button" id="quissly-connect-send" class="button" data-url="' . esc_url( admin_url( 'admin-ajax.php' ) ) . '" data-nonce="' . esc_attr( wp_create_nonce( Quissly_Setup::NONCE ) ) . '"'
+						. ' data-sending="' . esc_attr__( 'Sending…', 'quissly-for-woocommerce' ) . '" data-sent="' . esc_attr__( 'We sent a 6-digit code to the address above. It expires in 10 minutes.', 'quissly-for-woocommerce' ) . '" data-failed="' . esc_attr__( 'The code could not be sent. Try again in a minute.', 'quissly-for-woocommerce' ) . '">'
+						. esc_html__( 'Send code', 'quissly-for-woocommerce' ) . '</button></p>';
+					echo '<p class="description" id="quissly-connect-code-status">' . esc_html__( 'Press Send code: Quissly emails a 6-digit code to the address above. Enter it here, then press Connect to Quissly.', 'quissly-for-woocommerce' ) . '</p>';
+					wp_print_inline_script_tag( self::SEND_CODE_JS );
 					echo '<p><button type="submit" name="connect" value="1" class="button button-primary">' . esc_html__( 'Connect to Quissly', 'quissly-for-woocommerce' ) . '</button></p>';
 					echo '<p><a href="' . esc_url( add_query_arg( 'quissly_manual', '1' ) ) . '">' . esc_html__( 'Already have a token? Paste it manually.', 'quissly-for-woocommerce' ) . '</a></p>';
 				}

@@ -87,7 +87,14 @@ class Quissly_Wizard {
 		switch ( (int) $step ) {
 			case self::STEP_TOKEN:
 				if ( ! empty( $input['connect'] ) ) {
-					$result = self::connect_automatically( isset( $input['email'] ) ? $input['email'] : '' );
+					// The code Quissly mailed (Send code); its sign-up refuses without it.
+					$code = isset( $input['code'] ) ? (string) preg_replace( '/\s+/', '', (string) $input['code'] ) : '';
+					if ( 1 !== preg_match( '/^\d{6}$/', $code ) ) {
+						self::$last_connect_error = __( 'Enter the 6-digit code we emailed you.', 'quissly-for-woocommerce' );
+						$next                     = self::STEP_TOKEN;
+						break;
+					}
+					$result = self::connect_automatically( isset( $input['email'] ) ? $input['email'] : '', null, null, $code );
 					if ( ! $result['ok'] ) {
 						self::$last_connect_error = $result['message'];
 						$next                     = self::STEP_TOKEN; // stay; let the merchant retry or fall back to manual.
